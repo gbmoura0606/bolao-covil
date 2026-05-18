@@ -21,6 +21,9 @@
     "@expo/metro-runtime": "~4.0.1",
     "@react-native-async-storage/async-storage": "2.1.2",
     "@expo/vector-icons": "^14.0.4",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-screens": "~4.10.0",
+    "react-native-gesture-handler": "~2.24.0",
     "axios": "^1.7.9"
   },
   "devDependencies": {
