@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Bolão Covil",
+    "slug": "bolao-covil",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": { "backgroundColor": "#0D0D0D" },
+    "ios": { "supportsTablet": false, "bundleIdentifier": "com.bolao.covil" },
+    "android": {
+      "adaptiveIcon": { "backgroundColor": "#0D0D0D" },
+      "package": "com.bolao.covil"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png",
+      "name": "Bolão Covil",
+      "themeColor": "#0D0D0D"
+    },
+    "plugins": ["expo-router"],
+    "scheme": "bolao-covil",
+    "experiments": { "typedRoutes": true }
+  }
+}
