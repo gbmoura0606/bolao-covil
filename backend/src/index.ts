@@ -12,8 +12,12 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT ?? 3001;
 
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : true;
+
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS?.split(',') ?? ['http://localhost:8081', 'http://localhost:19006'],
+  origin: allowedOrigins,
   credentials: true,
 }));
 
