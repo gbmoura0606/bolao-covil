@@ -2,7 +2,7 @@
   "name": "bolao-covil-backend",
   "version": "1.0.0",
   "description": "Bolão Covil API server",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
