@@ -1,0 +1,257 @@
+import React from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Alert,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/hooks/useAuth';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { Colors, FontSizes, FontWeights, Spacing, BorderRadius, Shadows } from '@/constants/theme';
+
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+interface MenuItemConfig {
+  id: string;
+  label: string;
+  icon: IoniconName;
+  destructive?: boolean;
+  onPress: () => void;
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+}
+
+export default function ConfiguracoesScreen(): React.JSX.Element {
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  async function handleLogout(): Promise<void> {
+    Alert.alert(
+      'Sair',
+      'Tem certeza que deseja sair da conta?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sair',
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            router.replace('/login');
+          },
+        },
+      ]
+    );
+  }
+
+  const menuItems: MenuItemConfig[] = [
+    {
+      id: 'password',
+      label: 'Alterar Senha',
+      icon: 'lock-closed-outline',
+      onPress: () => {
+        Alert.alert('Em breve', 'Funcionalidade disponível na próxima versão.');
+      },
+    },
+    {
+      id: 'notifications',
+      label: 'Notificações',
+      icon: 'notifications-outline',
+      onPress: () => {
+        Alert.alert('Em breve', 'Funcionalidade disponível na próxima versão.');
+      },
+    },
+    {
+      id: 'theme',
+      label: 'Tema',
+      icon: 'color-palette-outline',
+      onPress: () => {
+        Alert.alert('Tema', 'Tema escuro ativado (padrão do Bolão Covil).');
+      },
+    },
+    {
+      id: 'logout',
+      label: 'Sair',
+      icon: 'log-out-outline',
+      destructive: true,
+      onPress: () => void handleLogout(),
+    },
+  ];
+
+  const initials = user ? getInitials(user.name) : '?';
+
+  return (
+    <View style={styles.container}>
+      <ScreenHeader title="Configurações" />
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.profileCard}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+          <View style={styles.profileInfo}>
+            <Text style={styles.userName}>{user?.name ?? 'Usuário'}</Text>
+            <Text style={styles.userEmail}>{user?.email ?? ''}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.sectionTitle}>Conta</Text>
+
+        <View style={styles.menuCard}>
+          {menuItems.map((item, index) => (
+            <React.Fragment key={item.id}>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={item.onPress}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.menuIconWrapper,
+                    item.destructive && styles.menuIconWrapperDestructive,
+                  ]}
+                >
+                  <Ionicons
+                    name={item.icon}
+                    size={20}
+                    color={item.destructive ? Colors.error : Colors.accentGold}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.menuLabel,
+                    item.destructive && styles.menuLabelDestructive,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+                {!item.destructive && (
+                  <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+                )}
+              </TouchableOpacity>
+              {index < menuItems.length - 1 && <View style={styles.divider} />}
+            </React.Fragment>
+          ))}
+        </View>
+
+        <Text style={styles.versionText}>Bolão Covil v1.0.0{'\n'}Copa do Mundo 2026</Text>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.backgroundAlt,
+  },
+  scrollContent: {
+    padding: Spacing.md,
+    paddingBottom: Spacing.xxl,
+  },
+  profileCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: Spacing.lg,
+    ...Shadows.md,
+  },
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.accentGold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: FontSizes.xl,
+    fontWeight: FontWeights.bold,
+    color: Colors.background,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: FontSizes.lg,
+    fontWeight: FontWeights.bold,
+    color: Colors.textPrimary,
+  },
+  userEmail: {
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+    marginTop: Spacing.xs,
+  },
+  sectionTitle: {
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.semibold,
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: Spacing.sm,
+    marginLeft: Spacing.xs,
+  },
+  menuCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    ...Shadows.md,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    gap: Spacing.md,
+  },
+  menuIconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuIconWrapperDestructive: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  menuLabel: {
+    flex: 1,
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.medium,
+    color: Colors.textPrimary,
+  },
+  menuLabelDestructive: {
+    color: Colors.error,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginLeft: Spacing.md + 36 + Spacing.md,
+  },
+  versionText: {
+    marginTop: Spacing.xl,
+    textAlign: 'center',
+    fontSize: FontSizes.xs,
+    color: Colors.textSecondary,
+    lineHeight: 18,
+  },
+});

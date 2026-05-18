@@ -1,0 +1,40 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import authRoutes from '../routes/auth';
+import matchRoutes from '../routes/matches';
+import predictionRoutes from '../routes/predictions';
+import rankingRoutes from '../routes/ranking';
+import leagueRoutes from '../routes/leagues';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT ?? 3001;
+
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS?.split(',') ?? ['http://localhost:8081', 'http://localhost:19006'],
+  credentials: true,
+}));
+
+app.use(express.json());
+
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.use('/api/auth', authRoutes);
+app.use('/api/matches', matchRoutes);
+app.use('/api/predictions', predictionRoutes);
+app.use('/api/ranking', rankingRoutes);
+app.use('/api/leagues', leagueRoutes);
+
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Rota não encontrada.' });
+});
+
+app.listen(PORT, () => {
+  console.log(`Bolão Covil API running on port ${PORT}`);
+});
+
+export default app;
