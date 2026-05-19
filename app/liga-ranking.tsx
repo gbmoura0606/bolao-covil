@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenHeader } from '@/components/ScreenHeader';
-import { Colors, FontSizes, FontWeights, Spacing, BorderRadius, Shadows } from '@/constants/theme';
+import { useRouter } from 'expo-router';
+import { Colors, FontSizes, FontWeights, Spacing, BorderRadius } from '@/constants/theme';
 
 // Reference view — mock data only
 const MOCK_PARTICIPANTS = [
@@ -164,12 +164,26 @@ const rowS = StyleSheet.create({
 });
 
 export default function LigaRankingScreen(): React.JSX.Element {
+  const router = useRouter();
   const leader = MOCK_PARTICIPANTS[0];
   const me = MOCK_PARTICIPANTS.find((p) => p.isCurrentUser);
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Covil da Miga" subtitle="Ranking da liga" />
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="chevron-back" size={22} color={Colors.accentGold} />
+        </TouchableOpacity>
+        <View style={styles.headerText}>
+          <Text style={styles.headerTitle}>Covil da Miga</Text>
+          <Text style={styles.headerSubtitle}>Ranking da liga</Text>
+        </View>
+      </View>
 
       {/* Summary bar */}
       <View style={styles.summaryBar}>
@@ -221,6 +235,37 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.backgroundAlt,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.backgroundAlt,
+    gap: Spacing.sm,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerText: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: FontSizes.xl,
+    fontWeight: FontWeights.bold,
+    color: Colors.textPrimary,
+    letterSpacing: 0.5,
+  },
+  headerSubtitle: {
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
   summaryBar: {
     flexDirection: 'row',
