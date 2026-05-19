@@ -9,8 +9,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import {
-  computeGroupStandings, computeThirdPlaceRanking,
-  computeOverallRanking, computeKnockoutBracket, getClassificationCriteria,
+  computeGroupStandings,
+  ALL_STANDINGS, THIRD_RANKING, OVERALL_RANKING, BRACKET,
+  getClassificationCriteria,
   GROUPS,
   type WCStanding, type RankedStanding, type ResolvedKnockoutMatch, type KnockoutRound,
 } from '@/services/computed';
@@ -227,7 +228,7 @@ const mpS = StyleSheet.create({
 
 function GroupBlock({ groupId }: { groupId: string }): React.JSX.Element {
   const group = GROUPS.find((g) => g.id === groupId)!;
-  const standings = useMemo(() => computeGroupStandings(group), [groupId]);
+  const standings = ALL_STANDINGS.get(groupId) ?? computeGroupStandings(group);
 
   return (
     <View style={gbS.card}>
@@ -282,7 +283,7 @@ function FaseDeGrupos(): React.JSX.Element {
 // ─── TERCEIROS COLOCADOS ──────────────────────────────────────────────────────
 
 function TerceirosColocados(): React.JSX.Element {
-  const thirds = useMemo(() => computeThirdPlaceRanking(), []);
+  const thirds = THIRD_RANKING;
 
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
@@ -361,7 +362,7 @@ const t3S = StyleSheet.create({
 
 function CriteriosView(): React.JSX.Element {
   const criteria = getClassificationCriteria();
-  const overall = useMemo<RankedStanding[]>(() => computeOverallRanking(), []);
+  const overall: RankedStanding[] = OVERALL_RANKING;
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Spacing.xxl }}>
@@ -453,8 +454,7 @@ const crS = StyleSheet.create({
 
 function MataMataView(): React.JSX.Element {
   const [koRound, setKoRound] = useState<KnockoutRound>('r32');
-  const bracket = useMemo(() => computeKnockoutBracket(), []);
-  const matches = bracket.filter((m) => m.round === koRound);
+  const matches = BRACKET.filter((m) => m.round === koRound);
   const ridx = KNOCKOUT_ROUNDS.indexOf(koRound);
 
   return (

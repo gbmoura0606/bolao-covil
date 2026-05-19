@@ -199,10 +199,19 @@ function resolveSlot(
   return null;
 }
 
-// ─── getKnockoutByRound (helper para componentes) ────────────────────────────
+// ─── Cache de módulo ──────────────────────────────────────────────────────────
+// Calculado UMA VEZ quando o módulo é importado (dados são constantes em runtime).
+// Quando os dados vierem de uma API, substituir por React Context ou Zustand.
+
+export const ALL_STANDINGS    = computeAllGroupStandings();
+export const THIRD_RANKING    = computeThirdPlaceRanking();
+export const OVERALL_RANKING  = computeOverallRanking();
+export const BRACKET          = computeKnockoutBracket();
+
+// ─── Helpers para componentes ─────────────────────────────────────────────────
 
 export function getKnockoutByRound(round: KnockoutRound): ResolvedKnockoutMatch[] {
-  return computeKnockoutBracket().filter((m) => m.round === round);
+  return BRACKET.filter((m) => m.round === round);
 }
 
 export function getClassificationCriteria() {
