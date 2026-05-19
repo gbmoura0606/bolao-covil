@@ -18,7 +18,7 @@ export default function LandingScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Sistema Covil</Text>
+        <Text style={styles.headerTitle}>COVIL DA MIGA</Text>
         <Text style={styles.headerSub}>Selecione o acesso desejado</Text>
       </View>
 
@@ -109,6 +109,7 @@ const styles = StyleSheet.create({
   },
   cardsContainer: {
     flex: 1,
+    flexDirection: 'row',
     gap: Spacing.md,
     paddingBottom: Spacing.lg,
   },
