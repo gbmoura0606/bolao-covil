@@ -87,6 +87,8 @@ const pnS = StyleSheet.create({
 
 // ─── Standings table ──────────────────────────────────────────────────────────
 
+const QUALIFYING_THIRDS = new Set(THIRD_RANKING.slice(0, 8).map((s) => s.team.id));
+
 function StandingsTable({ standings, highlightTop = 2 }: { standings: WCStanding[]; highlightTop?: number }): React.JSX.Element {
   return (
     <View>
@@ -106,10 +108,11 @@ function StandingsTable({ standings, highlightTop = 2 }: { standings: WCStanding
       </View>
       {standings.map((st, idx) => {
         const qualify = idx < highlightTop;
+        const thirdQualifies = idx === 2 && QUALIFYING_THIRDS.has(st.team.id);
         const pct = st.played > 0 ? Math.round((st.won / st.played) * 100) : 0;
         return (
-          <View key={st.team.id} style={[stS.row, idx < standings.length - 1 && stS.rowBorder, qualify && stS.rowQ]}>
-            <View style={stS.posCol}><Text style={[stS.pos, qualify && stS.posQ]}>{idx + 1}</Text></View>
+          <View key={st.team.id} style={[stS.row, idx < standings.length - 1 && stS.rowBorder, qualify && stS.rowQ, thirdQualifies && stS.rowT3]}>
+            <View style={stS.posCol}><Text style={[stS.pos, qualify && stS.posQ, thirdQualifies && stS.posT3]}>{idx + 1}</Text></View>
             <View style={stS.teamCell}>
               <Text style={stS.flag}>{st.team.flag}</Text>
               <Text style={stS.name} numberOfLines={1}>{st.team.name}</Text>
@@ -141,7 +144,9 @@ const stS = StyleSheet.create({
   h: { fontSize: 10, fontWeight: FontWeights.semibold, color: Colors.textSecondary, textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.xs, paddingVertical: 7 },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(55,65,81,0.5)' },
-  rowQ: { backgroundColor: 'rgba(245,158,11,0.05)' },
+  rowQ:  { backgroundColor: 'rgba(245,158,11,0.05)' },
+  rowT3: { backgroundColor: 'rgba(16,185,129,0.06)' },
+  posT3: { color: Colors.success },
   posCol: { width: 20, alignItems: 'center' },
   teamCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
   numCol: { width: 26, alignItems: 'center' },
@@ -251,7 +256,9 @@ function GroupBlock({ groupId }: { groupId: string }): React.JSX.Element {
       )}
       <View style={gbS.legend}>
         <View style={[gbS.ldot, { backgroundColor: Colors.accentGold }]} />
-        <Text style={gbS.ltxt}>Classificados para a Rodada de 32</Text>
+        <Text style={gbS.ltxt}>Classificados diretos</Text>
+        <View style={[gbS.ldot, { backgroundColor: Colors.success, marginLeft: 8 }]} />
+        <Text style={gbS.ltxt}>3º classificado</Text>
       </View>
     </View>
   );
