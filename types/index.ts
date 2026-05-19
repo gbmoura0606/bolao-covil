@@ -54,6 +54,10 @@ export interface League {
   ownerId: string;
   participantCount: number;
   userPosition?: number;
+  userPoints?: number;
+  firstPlacePoints?: number;
+  firstPlaceName?: string;
+  emoji?: string;
   createdAt: string;
 }
 

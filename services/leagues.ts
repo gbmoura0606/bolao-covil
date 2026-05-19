@@ -8,6 +8,10 @@ const MOCK_LEAGUES: League[] = [
     ownerId: 'user-001',
     participantCount: 10,
     userPosition: 4,
+    userPoints: 87,
+    firstPlacePoints: 124,
+    firstPlaceName: 'Rodrigo',
+    emoji: '🏆',
     createdAt: '2026-01-10T10:00:00Z',
   },
   {
@@ -17,6 +21,10 @@ const MOCK_LEAGUES: League[] = [
     ownerId: 'user-003',
     participantCount: 6,
     userPosition: 2,
+    userPoints: 110,
+    firstPlacePoints: 118,
+    firstPlaceName: 'Tia Márcia',
+    emoji: '👨‍👩‍👧‍👦',
     createdAt: '2026-02-15T14:00:00Z',
   },
   {
@@ -26,6 +34,10 @@ const MOCK_LEAGUES: League[] = [
     ownerId: 'user-007',
     participantCount: 18,
     userPosition: 7,
+    userPoints: 74,
+    firstPlacePoints: 131,
+    firstPlaceName: 'Fernanda',
+    emoji: '💼',
     createdAt: '2026-03-01T09:00:00Z',
   },
 ];

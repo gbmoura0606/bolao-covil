@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { LeagueCard } from '@/components/LeagueCard';
 import { JoinLeagueModal } from '@/components/JoinLeagueModal';
+import { CreateLeagueModal } from '@/components/CreateLeagueModal';
 import { Toast } from '@/components/Toast';
 import { getUserLeagues } from '@/services/leagues';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '@/constants/theme';
@@ -23,7 +24,8 @@ export default function LigasScreen(): React.JSX.Element {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [modalVisible, setModalVisible] = useState(false);
+  const [joinModalVisible, setJoinModalVisible] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
   const [toast, setToast] = useState<{ visible: boolean; message: string }>({
     visible: false,
     message: '',
@@ -53,13 +55,25 @@ export default function LigasScreen(): React.JSX.Element {
   }
 
   function handleJoinSuccess(leagueName: string): void {
-    setModalVisible(false);
+    setJoinModalVisible(false);
     setToast({ visible: true, message: `Você entrou em "${leagueName}" com sucesso!` });
     void loadLeagues(true);
   }
 
+  function handleCreateSuccess(leagueName: string): void {
+    setCreateModalVisible(false);
+    setToast({ visible: true, message: `Liga "${leagueName}" criada com sucesso!` });
+    void loadLeagues(true);
+  }
+
   function renderItem({ item }: ListRenderItemInfo<League>): React.JSX.Element {
-    return <LeagueCard league={item} />;
+    return (
+      <LeagueCard
+        league={item}
+        onPress={undefined}
+        onConfigPress={undefined}
+      />
+    );
   }
 
   return (
@@ -109,21 +123,37 @@ export default function LigasScreen(): React.JSX.Element {
         />
       )}
 
-      <View style={styles.fab}>
+      {/* Bottom action buttons */}
+      <View style={styles.bottomBar}>
         <TouchableOpacity
-          style={styles.fabBtn}
-          onPress={() => setModalVisible(true)}
+          style={styles.btnSecondary}
+          onPress={() => setJoinModalVisible(true)}
           activeOpacity={0.8}
         >
-          <Ionicons name="add" size={22} color={Colors.background} />
-          <Text style={styles.fabText}>Entrar em Nova Liga</Text>
+          <Ionicons name="key-outline" size={18} color={Colors.accentGold} />
+          <Text style={styles.btnSecondaryText}>Entrar com Código</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.btnPrimary}
+          onPress={() => setCreateModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="add-circle-outline" size={18} color={Colors.background} />
+          <Text style={styles.btnPrimaryText}>Criar Nova Liga</Text>
         </TouchableOpacity>
       </View>
 
       <JoinLeagueModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
+        visible={joinModalVisible}
+        onClose={() => setJoinModalVisible(false)}
         onSuccess={handleJoinSuccess}
+      />
+
+      <CreateLeagueModal
+        visible={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        onSuccess={handleCreateSuccess}
       />
     </View>
   );
@@ -136,7 +166,7 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingTop: Spacing.md,
-    paddingBottom: 100,
+    paddingBottom: 110,
   },
   center: {
     flex: 1,
@@ -167,26 +197,46 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
   },
-  fab: {
+  bottomBar: {
     position: 'absolute',
     bottom: Spacing.lg,
     left: Spacing.lg,
     right: Spacing.lg,
+    flexDirection: 'row',
+    gap: Spacing.sm,
   },
-  fabBtn: {
-    backgroundColor: Colors.accentGold,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
+  btnSecondary: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.accentGold,
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    ...Shadows.md,
+  },
+  btnSecondaryText: {
+    color: Colors.accentGold,
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.bold,
+  },
+  btnPrimary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.accentGold,
     ...Shadows.lg,
   },
-  fabText: {
+  btnPrimaryText: {
     color: Colors.background,
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.sm,
     fontWeight: FontWeights.bold,
-    letterSpacing: 0.5,
   },
 });
