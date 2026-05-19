@@ -1,0 +1,9 @@
+node_modules/
+.expo/
+web-preview/
+dist/
+package-lock.json
+*.log
+.env
+.env.local
+.DS_Store
