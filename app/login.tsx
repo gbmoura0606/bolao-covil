@@ -9,8 +9,10 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { Colors, FontSizes, FontWeights, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 
@@ -70,12 +72,20 @@ export default function LoginScreen(): React.JSX.Element {
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <SafeAreaView style={styles.safeArea}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.replace('/landing')}>
+          <Ionicons name="chevron-back" size={20} color={Colors.textSecondary} />
+          <Text style={styles.backText}>Início</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={styles.logo}>⚽</Text>
+          <View style={styles.logoWrap}>
+            <Text style={styles.logo}>⚽</Text>
+          </View>
           <Text style={styles.appName}>Bolão Covil</Text>
           <Text style={styles.tagline}>Copa do Mundo 2026</Text>
         </View>
@@ -151,6 +161,31 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  safeArea: {
+    backgroundColor: Colors.background,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: 4,
+  },
+  backText: {
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+  },
+  logoWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(5,150,105,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.darkGreen,
   },
   loadingContainer: {
     flex: 1,

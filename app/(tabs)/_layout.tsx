@@ -16,7 +16,7 @@ interface TabConfig {
 
 const TABS: TabConfig[] = [
   { name: 'jogos', title: 'Jogos', icon: 'american-football-outline', iconFocused: 'american-football' },
-  { name: 'ranking', title: 'Ranking', icon: 'trophy-outline', iconFocused: 'trophy' },
+  { name: 'ranking', title: 'Tabelas', icon: 'trophy-outline', iconFocused: 'trophy' },
   { name: 'ligas', title: 'Ligas', icon: 'people-outline', iconFocused: 'people' },
   { name: 'configuracoes', title: 'Config', icon: 'settings-outline', iconFocused: 'settings' },
 ];
@@ -27,7 +27,7 @@ export default function TabsLayout(): React.JSX.Element {
 
   React.useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace('/login');
+      router.replace('/landing');
     }
   }, [isLoading, isAuthenticated, router]);
 

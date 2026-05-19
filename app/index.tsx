@@ -13,7 +13,7 @@ export default function Index(): React.JSX.Element {
       if (isAuthenticated) {
         router.replace('/(tabs)/jogos');
       } else {
-        router.replace('/login');
+        router.replace('/landing');
       }
     }
   }, [isLoading, isAuthenticated, router]);
