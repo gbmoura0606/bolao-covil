@@ -10,6 +10,7 @@ import {
   ListRenderItemInfo,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { LeagueCard } from '@/components/LeagueCard';
 import { JoinLeagueModal } from '@/components/JoinLeagueModal';
@@ -21,6 +22,7 @@ import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '
 import type { League } from '@/types';
 
 export default function LigasScreen(): React.JSX.Element {
+  const router = useRouter();
   const [leagues, setLeagues] = useState<League[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -79,7 +81,7 @@ export default function LigasScreen(): React.JSX.Element {
     return (
       <LeagueCard
         league={item}
-        onPress={undefined}
+        onPress={() => router.push('/liga-ranking')}
         onConfigPress={() => setConfigLeague(item)}
       />
     );
