@@ -14,6 +14,7 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { LeagueCard } from '@/components/LeagueCard';
 import { JoinLeagueModal } from '@/components/JoinLeagueModal';
 import { CreateLeagueModal } from '@/components/CreateLeagueModal';
+import { LeagueConfigModal } from '@/components/LeagueConfigModal';
 import { Toast } from '@/components/Toast';
 import { getUserLeagues } from '@/services/leagues';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '@/constants/theme';
@@ -26,6 +27,7 @@ export default function LigasScreen(): React.JSX.Element {
   const [error, setError] = useState('');
   const [joinModalVisible, setJoinModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [configLeague, setConfigLeague] = useState<League | null>(null);
   const [toast, setToast] = useState<{ visible: boolean; message: string }>({
     visible: false,
     message: '',
@@ -66,12 +68,19 @@ export default function LigasScreen(): React.JSX.Element {
     void loadLeagues(true);
   }
 
+  function handleConfigSave(updated: Partial<League>): void {
+    setLeagues((prev) =>
+      prev.map((l) => (l.id === configLeague?.id ? { ...l, ...updated } : l))
+    );
+    setToast({ visible: true, message: 'Configurações salvas!' });
+  }
+
   function renderItem({ item }: ListRenderItemInfo<League>): React.JSX.Element {
     return (
       <LeagueCard
         league={item}
         onPress={undefined}
-        onConfigPress={undefined}
+        onConfigPress={() => setConfigLeague(item)}
       />
     );
   }
@@ -154,6 +163,13 @@ export default function LigasScreen(): React.JSX.Element {
         visible={createModalVisible}
         onClose={() => setCreateModalVisible(false)}
         onSuccess={handleCreateSuccess}
+      />
+
+      <LeagueConfigModal
+        visible={configLeague !== null}
+        league={configLeague}
+        onClose={() => setConfigLeague(null)}
+        onSave={handleConfigSave}
       />
     </View>
   );

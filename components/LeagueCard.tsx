@@ -10,15 +10,16 @@ interface LeagueCardProps {
   onConfigPress?: () => void;
 }
 
-function getPositionLabel(pos: number): string {
-  return `${pos}º lugar`;
-}
-
 export function LeagueCard({ league, onPress, onConfigPress }: LeagueCardProps): React.JSX.Element {
   const diff =
     league.firstPlacePoints !== undefined && league.userPoints !== undefined
       ? league.firstPlacePoints - league.userPoints
       : undefined;
+
+  const leaderLabel =
+    league.firstPlaceName !== undefined && league.firstPlacePoints !== undefined
+      ? `${league.firstPlaceName} · ${league.firstPlacePoints}pts`
+      : league.firstPlaceName;
 
   return (
     <TouchableOpacity
@@ -28,8 +29,16 @@ export function LeagueCard({ league, onPress, onConfigPress }: LeagueCardProps):
     >
       {/* Top row: emoji + name + config button */}
       <View style={styles.topRow}>
-        <View style={styles.emojiWrapper}>
-          <Text style={styles.emoji}>{league.emoji ?? '🏆'}</Text>
+        {/* Emoji with position badge overlay */}
+        <View style={styles.emojiOuter}>
+          <View style={styles.emojiWrapper}>
+            <Text style={styles.emoji}>{league.emoji ?? '🏆'}</Text>
+          </View>
+          {league.userPosition !== undefined && (
+            <View style={styles.positionOverlay}>
+              <Text style={styles.positionOverlayText}>{league.userPosition}º</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.info}>
@@ -48,20 +57,15 @@ export function LeagueCard({ league, onPress, onConfigPress }: LeagueCardProps):
         </TouchableOpacity>
       </View>
 
-      {/* Stats row: participants + position */}
+      {/* Stats row: participants only (position moved to badge) */}
       <View style={styles.statsRow}>
         <View style={styles.stat}>
           <Ionicons name="people" size={14} color={Colors.textSecondary} />
           <Text style={styles.statText}>{league.participantCount} participantes</Text>
         </View>
-        {league.userPosition !== undefined && (
-          <View style={styles.positionBadge}>
-            <Text style={styles.positionText}>{getPositionLabel(league.userPosition)}</Text>
-          </View>
-        )}
       </View>
 
-      {/* Points info */}
+      {/* Points info: Seus pontos | Líder | Distância pro 1º */}
       {league.userPoints !== undefined && (
         <View style={styles.pointsRow}>
           <View style={styles.pointsItem}>
@@ -69,25 +73,27 @@ export function LeagueCard({ league, onPress, onConfigPress }: LeagueCardProps):
             <Text style={styles.pointsValue}>{league.userPoints}</Text>
           </View>
 
-          {diff !== undefined && diff > 0 && (
-            <View style={styles.pointsItem}>
-              <Text style={styles.pointsLabel}>Distância pro 1º</Text>
-              <Text style={[styles.pointsValue, styles.diffValue]}>−{diff}</Text>
-            </View>
-          )}
-          {diff === 0 && (
-            <View style={styles.pointsItem}>
-              <Text style={styles.pointsLabel}>Distância pro 1º</Text>
-              <Text style={[styles.pointsValue, styles.leadValue]}>Líder!</Text>
-            </View>
-          )}
+          <View style={styles.divider} />
 
-          {league.firstPlaceName !== undefined && (
-            <View style={styles.pointsItem}>
-              <Text style={styles.pointsLabel}>Líder</Text>
-              <Text style={styles.pointsValue}>{league.firstPlaceName}</Text>
-            </View>
-          )}
+          <View style={styles.pointsItem}>
+            <Text style={styles.pointsLabel}>Líder</Text>
+            {diff === 0 ? (
+              <Text style={[styles.pointsValue, styles.leadValue]}>Você!</Text>
+            ) : (
+              <Text style={styles.pointsValue} numberOfLines={1}>{leaderLabel}</Text>
+            )}
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.pointsItem}>
+            <Text style={styles.pointsLabel}>Distância pro 1º</Text>
+            {diff === 0 ? (
+              <Text style={[styles.pointsValue, styles.leadValue]}>—</Text>
+            ) : diff !== undefined ? (
+              <Text style={[styles.pointsValue, styles.diffValue]}>−{diff}</Text>
+            ) : null}
+          </View>
         </View>
       )}
 
@@ -119,6 +125,9 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     marginBottom: Spacing.sm,
   },
+  emojiOuter: {
+    position: 'relative',
+  },
   emojiWrapper: {
     width: 44,
     height: 44,
@@ -131,6 +140,25 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 22,
+  },
+  positionOverlay: {
+    position: 'absolute',
+    bottom: -6,
+    right: -8,
+    backgroundColor: Colors.darkGreen,
+    borderWidth: 1,
+    borderColor: Colors.success,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    minWidth: 22,
+    alignItems: 'center',
+  },
+  positionOverlayText: {
+    fontSize: 9,
+    fontWeight: FontWeights.bold,
+    color: Colors.success,
+    lineHeight: 13,
   },
   info: {
     flex: 1,
@@ -166,8 +194,8 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: Spacing.sm,
+    marginTop: 4,
   },
   stat: {
     flexDirection: 'row',
@@ -178,19 +206,6 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.sm,
     color: Colors.textSecondary,
   },
-  positionBadge: {
-    backgroundColor: 'rgba(6, 95, 70, 0.4)',
-    borderWidth: 1,
-    borderColor: Colors.darkGreen,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-  },
-  positionText: {
-    fontSize: FontSizes.xs,
-    color: Colors.success,
-    fontWeight: FontWeights.semibold,
-  },
   pointsRow: {
     flexDirection: 'row',
     backgroundColor: Colors.backgroundAlt,
@@ -198,16 +213,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    gap: 0,
     marginBottom: Spacing.sm,
+    overflow: 'hidden',
+  },
+  divider: {
+    width: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 2,
   },
   pointsItem: {
     flex: 1,
     alignItems: 'center',
+    paddingHorizontal: 4,
   },
   pointsLabel: {
-    fontSize: 10,
+    fontSize: 9,
     color: Colors.textSecondary,
     marginBottom: 2,
     textAlign: 'center',
