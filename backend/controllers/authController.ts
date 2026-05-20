@@ -38,7 +38,9 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    const user = await prisma.user.findUnique({ where: { nickname: nickname.trim() } });
+    const user = await prisma.user.findFirst({
+      where: { nickname: { equals: nickname.trim(), mode: 'insensitive' } },
+    });
     if (!user) {
       res.status(401).json({ error: 'Usuário não encontrado.' });
       return;
