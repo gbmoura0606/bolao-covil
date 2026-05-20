@@ -8,8 +8,21 @@ const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET ?? 'bolao-covil-secret-change-in-production';
 const JWT_EXPIRES_IN = '7d';
 
-const INITIAL_USERS = [
-  'Du', 'Manetta', 'Sunset', 'Jhow', 'Nathan', 'Lorenzo', 'Rubens', 'Peter', 'Vini',
+interface UserConfig {
+  nickname: string;
+  canAccessGerencia: boolean;
+}
+
+const INITIAL_USERS: UserConfig[] = [
+  { nickname: 'Du',      canAccessGerencia: true  },
+  { nickname: 'Manetta', canAccessGerencia: true  },
+  { nickname: 'Sunset',  canAccessGerencia: true  },
+  { nickname: 'Jhow',    canAccessGerencia: true  },
+  { nickname: 'Nathan',  canAccessGerencia: false },
+  { nickname: 'Lorenzo', canAccessGerencia: true  },
+  { nickname: 'Rubens',  canAccessGerencia: true  },
+  { nickname: 'Peter',   canAccessGerencia: true  },
+  { nickname: 'Vini',    canAccessGerencia: true  },
 ];
 const DEFAULT_PASSWORD = '123';
 
@@ -19,11 +32,11 @@ function generateToken(userId: string, nickname: string): string {
 
 export async function seedUsers(): Promise<void> {
   const defaultHash = await bcrypt.hash(DEFAULT_PASSWORD, 12);
-  for (const nickname of INITIAL_USERS) {
+  for (const { nickname, canAccessGerencia } of INITIAL_USERS) {
     await prisma.user.upsert({
       where: { nickname },
-      update: {},
-      create: { nickname, passwordHash: defaultHash, mustChangePassword: true },
+      update: { canAccessGerencia },
+      create: { nickname, passwordHash: defaultHash, mustChangePassword: true, canAccessGerencia },
     });
   }
   console.log(`[seed] ${INITIAL_USERS.length} users ensured.`);
@@ -55,7 +68,12 @@ export async function login(req: Request, res: Response): Promise<void> {
     const token = generateToken(user.id, user.nickname);
     res.json({
       token,
-      user: { id: user.id, nickname: user.nickname, createdAt: user.createdAt },
+      user: {
+        id: user.id,
+        nickname: user.nickname,
+        canAccessGerencia: user.canAccessGerencia,
+        createdAt: user.createdAt,
+      },
       mustChangePassword: user.mustChangePassword,
     });
   } catch {
@@ -93,6 +111,7 @@ export async function getMe(req: AuthenticatedRequest, res: Response): Promise<v
     res.json({
       id: user.id,
       nickname: user.nickname,
+      canAccessGerencia: user.canAccessGerencia,
       mustChangePassword: user.mustChangePassword,
       createdAt: user.createdAt,
     });

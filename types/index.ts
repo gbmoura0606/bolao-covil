@@ -3,6 +3,7 @@ export type MatchStatus = 'OPEN' | 'CLOSED' | 'FINISHED';
 export interface User {
   id: string;
   nickname: string;
+  canAccessGerencia: boolean;
   createdAt: string;
 }
 
@@ -77,6 +78,7 @@ export interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   mustChangePassword: boolean;
+  canAccessGerencia: boolean;
 }
 
 export interface UserAuthData {

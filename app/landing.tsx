@@ -52,7 +52,11 @@ export default function LandingScreen(): React.JSX.Element {
         </TouchableOpacity>
 
         {/* Gerência do Setor */}
-        <View style={[styles.gerenciaCard, styles.cardDisabled]}>
+        <TouchableOpacity
+          style={styles.gerenciaCard}
+          onPress={() => router.push('/login-gerencia')}
+          activeOpacity={0.85}
+        >
           <View style={styles.cardInner}>
             <View style={styles.gerenciaIconWrap}>
               <Text style={styles.gerenciaIcon}>🏢</Text>
@@ -68,13 +72,12 @@ export default function LandingScreen(): React.JSX.Element {
             </Text>
 
             <View style={styles.gerenciaBtn}>
-              <Text style={styles.gerenciaBtnText}>Em breve</Text>
+              <Text style={styles.gerenciaBtnText}>Entrar →</Text>
             </View>
           </View>
 
           <View style={styles.gerenciaAccent} />
-          <View style={styles.disabledOverlay} />
-        </View>
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.footer}>
@@ -132,9 +135,6 @@ const styles = StyleSheet.create({
     borderColor: '#1A2D4A',
     overflow: 'hidden',
     ...Shadows.lg,
-  },
-  cardDisabled: {
-    opacity: 0.6,
   },
   cardInner: {
     flex: 1,
@@ -273,11 +273,6 @@ const styles = StyleSheet.create({
     borderRadius: 70,
     backgroundColor: 'rgba(59,130,246,0.06)',
   },
-  disabledOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.15)',
-  },
-
   footer: {
     textAlign: 'center',
     fontSize: FontSizes.xs,

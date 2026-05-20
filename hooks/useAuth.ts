@@ -50,7 +50,10 @@ export function useAuth(): AuthState & {
     ]);
     setUser(result.user);
     setMustChangePassword(result.mustChangePassword);
-    return { mustChangePassword: result.mustChangePassword };
+    return {
+      mustChangePassword: result.mustChangePassword,
+      canAccessGerencia: result.user.canAccessGerencia,
+    };
   }, []);
 
   const logout = useCallback(async (): Promise<void> => {
@@ -75,6 +78,7 @@ export function useAuth(): AuthState & {
     isLoading,
     isAuthenticated: user !== null,
     mustChangePassword,
+    canAccessGerencia: user?.canAccessGerencia ?? false,
     login,
     logout,
     changePassword,

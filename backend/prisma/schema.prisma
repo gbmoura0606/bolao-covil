@@ -15,6 +15,7 @@ model User {
   nickname           String   @unique
   passwordHash       String
   mustChangePassword Boolean  @default(true)
+  canAccessGerencia  Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
