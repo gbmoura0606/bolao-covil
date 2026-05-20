@@ -94,3 +94,74 @@ export interface PredictionState {
     submitted: boolean;
   };
 }
+
+// ─── Gerência do Setor ────────────────────────────────────────────────────────
+
+export interface Resident {
+  id: string;
+  name: string;
+  /** Multiplicador para divisão proporcional. Padrão: 1.0 */
+  weight: number;
+  active: boolean;
+}
+
+export type ExpenseCategory =
+  | 'aluguel'
+  | 'agua'
+  | 'luz'
+  | 'internet'
+  | 'gas'
+  | 'manutencao'
+  | 'compra_coletiva'
+  | 'extra';
+
+export type ExpenseSplitType = 'igual' | 'proporcional';
+
+export interface Expense {
+  id: string;
+  description: string;
+  category: ExpenseCategory;
+  /** Valor em reais (float). Ex: 1800.00 */
+  amount: number;
+  /** Data do pagamento no formato YYYY-MM-DD */
+  date: string;
+  /** Mês de competência no formato YYYY-MM */
+  competencyMonth: string;
+  paidById: string;
+  paidByName: string;
+  splitType: ExpenseSplitType;
+  createdAt: string;
+  createdById: string;
+}
+
+export interface ResidentBalance {
+  resident: Resident;
+  /** Total que este morador efetivamente pagou no mês */
+  paid: number;
+  /** Total que este morador deveria pagar (cota calculada) */
+  owes: number;
+  /** paid − owes. Positivo = tem a receber. Negativo = ainda deve. */
+  balance: number;
+}
+
+export interface Transfer {
+  from: Resident;
+  to: Resident;
+  amount: number;
+}
+
+// ─── Lista de Compras ─────────────────────────────────────────────────────────
+
+export type ShoppingItemStatus = 'pendente' | 'comprado' | 'cancelado';
+
+export interface ShoppingItem {
+  id: string;
+  name: string;
+  addedById: string;
+  addedByName: string;
+  status: ShoppingItemStatus;
+  createdAt: string;
+  updatedAt: string;
+  updatedById?: string;
+  updatedByName?: string;
+}

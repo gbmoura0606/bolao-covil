@@ -6,11 +6,42 @@ import {
   StyleSheet,
   SafeAreaView,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { Colors, FontSizes, FontWeights, Spacing, BorderRadius } from '@/constants/theme';
+
+const MODULES = [
+  {
+    id: 'financeiro',
+    icon: '💰',
+    label: 'Financeiro',
+    description: 'Despesas, divisão e fechamento mensal da república',
+    route: '/gerencia/financeiro',
+    color: '#22C55E',
+    colorBg: 'rgba(34,197,94,0.10)',
+  },
+  {
+    id: 'compras',
+    icon: '🛒',
+    label: 'Lista de Compras',
+    description: 'Itens pendentes e histórico do que foi comprado',
+    route: '/gerencia/compras',
+    color: '#F59E0B',
+    colorBg: 'rgba(245,158,11,0.10)',
+  },
+  {
+    id: 'moradores',
+    icon: '👥',
+    label: 'Moradores',
+    description: 'Gerenciar moradores e pesos de divisão proporcional',
+    route: '/gerencia/moradores',
+    color: '#60A5FA',
+    colorBg: 'rgba(96,165,250,0.10)',
+  },
+] as const;
 
 export default function GerenciaHomeScreen(): React.JSX.Element {
   const { user, logout } = useAuth();
@@ -35,27 +66,38 @@ export default function GerenciaHomeScreen(): React.JSX.Element {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.iconWrap}>
-            <Text style={styles.icon}>🏢</Text>
+            <Text style={styles.headerIcon}>🏢</Text>
           </View>
           <View>
-            <Text style={styles.title}>Gerência do Setor</Text>
-            <Text style={styles.subtitle}>Olá, {user?.nickname ?? ''}</Text>
+            <Text style={styles.headerTitle}>Gerência do Setor</Text>
+            <Text style={styles.headerSub}>Olá, {user?.nickname ?? ''}</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} activeOpacity={0.7}>
           <Ionicons name="log-out-outline" size={22} color={Colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.placeholder}>
-          <Ionicons name="construct-outline" size={48} color="#2E4A7A" />
-          <Text style={styles.placeholderTitle}>Em construção</Text>
-          <Text style={styles.placeholderDesc}>
-            Os módulos de gerência estão sendo desenvolvidos.
-          </Text>
-        </View>
-      </View>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>Módulos</Text>
+        {MODULES.map(mod => (
+          <TouchableOpacity
+            key={mod.id}
+            style={styles.moduleCard}
+            onPress={() => router.push(mod.route as any)}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.moduleIconWrap, { backgroundColor: mod.colorBg }]}>
+              <Text style={styles.moduleIcon}>{mod.icon}</Text>
+            </View>
+            <View style={styles.moduleText}>
+              <Text style={styles.moduleLabel}>{mod.label}</Text>
+              <Text style={styles.moduleDesc}>{mod.description}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={mod.color} />
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -89,15 +131,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1E3A5F',
   },
-  icon: {
+  headerIcon: {
     fontSize: 22,
   },
-  title: {
+  headerTitle: {
     fontSize: FontSizes.md,
     fontWeight: FontWeights.bold,
     color: '#60A5FA',
   },
-  subtitle: {
+  headerSub: {
     fontSize: FontSizes.xs,
     color: Colors.textSecondary,
     marginTop: 1,
@@ -106,41 +148,49 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
   },
   content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.xl,
+    padding: Spacing.lg,
+    gap: Spacing.sm,
   },
-  placeholder: {
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  placeholderTitle: {
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.bold,
-    color: Colors.textPrimary,
-  },
-  placeholderDesc: {
-    fontSize: FontSizes.sm,
+  sectionLabel: {
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.semibold,
     color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: Spacing.xs,
   },
-  changePasswordBtn: {
+  moduleCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
-    marginTop: Spacing.xl,
-    backgroundColor: 'rgba(59,130,246,0.1)',
+    backgroundColor: '#111827',
     borderWidth: 1,
-    borderColor: '#1E3A5F',
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    borderColor: '#1A2D4A',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    gap: Spacing.md,
   },
-  changePasswordText: {
-    fontSize: FontSizes.sm,
-    color: '#60A5FA',
-    fontWeight: FontWeights.medium,
+  moduleIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moduleIcon: {
+    fontSize: 26,
+  },
+  moduleText: {
+    flex: 1,
+  },
+  moduleLabel: {
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.semibold,
+    color: Colors.textPrimary,
+    marginBottom: 3,
+  },
+  moduleDesc: {
+    fontSize: FontSizes.xs,
+    color: Colors.textSecondary,
+    lineHeight: 17,
   },
 });
