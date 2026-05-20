@@ -3,10 +3,12 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from '../routes/auth';
 import { seedUsers } from '../controllers/authController';
+import { seedWorldCup } from '../seed/worldcup';
 import matchRoutes from '../routes/matches';
 import predictionRoutes from '../routes/predictions';
 import rankingRoutes from '../routes/ranking';
 import leagueRoutes from '../routes/leagues';
+import standingsRoutes from '../routes/standings';
 
 dotenv.config();
 
@@ -33,6 +35,7 @@ app.use('/api/matches', matchRoutes);
 app.use('/api/predictions', predictionRoutes);
 app.use('/api/ranking', rankingRoutes);
 app.use('/api/leagues', leagueRoutes);
+app.use('/api/standings', standingsRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'Rota não encontrada.' });
@@ -40,6 +43,7 @@ app.use((_req, res) => {
 
 async function start(): Promise<void> {
   await seedUsers();
+  await seedWorldCup();
   app.listen(PORT, () => {
     console.log(`Bolão Covil API running on port ${PORT}`);
   });

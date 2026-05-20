@@ -42,19 +42,23 @@ enum MatchStatus {
 
 model Match {
   id         String      @id @default(cuid())
-  homeTeamId String
-  awayTeamId String
+  externalId String?     @unique
+  homeTeamId String?
+  awayTeamId String?
   matchDate  DateTime
   status     MatchStatus @default(OPEN)
   homeScore  Int?
   awayScore  Int?
   round      String
   group      String?
+  venue      String?
+  homeSlot   String?
+  awaySlot   String?
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 
-  homeTeam    Team         @relation("HomeTeam", fields: [homeTeamId], references: [id])
-  awayTeam    Team         @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  homeTeam    Team?        @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam    Team?        @relation("AwayTeam", fields: [awayTeamId], references: [id])
   predictions Prediction[]
 }
 

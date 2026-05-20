@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSizes, FontWeights, Spacing, BorderRadius, Shadows } from '@/constants/theme';
+import { createLeague } from '@/services/leagues';
 
 interface CreateLeagueModalProps {
   visible: boolean;
@@ -45,19 +46,19 @@ export function CreateLeagueModal({ visible, onClose, onSuccess }: CreateLeagueM
       setError('Informe o nome da liga.');
       return;
     }
-    if (!code.trim() || code.trim().length < 4) {
-      setError('O código deve ter pelo menos 4 caracteres.');
-      return;
-    }
     setError('');
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setIsLoading(false);
-    const created = name.trim();
-    setName('');
-    setCode(randomCode());
-    setRequiresAuth(false);
-    onSuccess(created);
+    try {
+      const league = await createLeague(name.trim());
+      setName('');
+      setCode(randomCode());
+      setRequiresAuth(false);
+      onSuccess(league.name);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao criar liga.');
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   function handleClose(): void {

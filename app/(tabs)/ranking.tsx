@@ -1,20 +1,12 @@
-// REGRA: Este arquivo consome APENAS services/computed.ts para dados derivados.
-// Para atualizar resultados edite worldcup2026.ts → tudo aqui se atualiza sozinho.
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  Dimensions, Platform, UIManager,
+  Dimensions, Platform, UIManager, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import {
-  computeGroupStandings,
-  ALL_STANDINGS, THIRD_RANKING, OVERALL_RANKING, BRACKET,
-  getClassificationCriteria,
-  GROUPS,
-  type WCStanding, type RankedStanding, type ResolvedKnockoutMatch, type KnockoutRound,
-} from '@/services/computed';
+import { getStandingsData } from '@/services/standings';
+import type { StandingsData, StandingRow, ApiGroup, BracketMatch } from '@/services/standings';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '@/constants/theme';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -35,6 +27,7 @@ const PHASE_LABEL: Record<Phase, string> = {
   matamata: 'Mata-Mata',
 };
 
+type KnockoutRound = 'r32' | 'r16' | 'qf' | 'sf' | 'final' | 'terceiro';
 const KNOCKOUT_ROUNDS: KnockoutRound[] = ['r32', 'r16', 'qf', 'sf', 'final', 'terceiro'];
 const KO_LABEL: Record<KnockoutRound, string> = {
   r32: 'Rodada de 32', r16: 'Oitavas de Final',
@@ -42,9 +35,21 @@ const KO_LABEL: Record<KnockoutRound, string> = {
   final: 'Final', terceiro: '3º Lugar',
 };
 
+const CLASSIFICATION_CRITERIA = [
+  { order: 1, title: 'Pontos', description: 'Vitória = 3 pts · Empate = 1 pt · Derrota = 0 pts' },
+  { order: 2, title: 'Saldo de Gols', description: 'Gols marcados menos gols sofridos nos jogos do grupo.' },
+  { order: 3, title: 'Gols Marcados', description: 'Total de gols marcados na fase de grupos.' },
+  { order: 4, title: 'Confronto Direto — Pontos', description: 'Pontos obtidos nos jogos entre as seleções empatadas.' },
+  { order: 5, title: 'Confronto Direto — Saldo', description: 'Saldo de gols nos confrontos diretos entre as seleções empatadas.' },
+  { order: 6, title: 'Confronto Direto — Gols', description: 'Gols marcados nos confrontos diretos.' },
+  { order: 7, title: 'Fair Play', description: 'Menor número de cartões ponderados (amarelo = 1 pt, vermelho = 3 pts).' },
+  { order: 8, title: 'Ranking FIFA', description: 'Posição no ranking FIFA no momento do sorteio.' },
+];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmtDate(d: string): string {
+function fmtDate(isoDate: string): string {
+  const d = isoDate.substring(0, 10);
   const [, m, day] = d.split('-');
   const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   return `${parseInt(day, 10)} ${months[parseInt(m, 10) - 1]}`;
@@ -87,9 +92,11 @@ const pnS = StyleSheet.create({
 
 // ─── Standings table ──────────────────────────────────────────────────────────
 
-const QUALIFYING_THIRDS = new Set(THIRD_RANKING.slice(0, 8).map((s) => s.team.id));
-
-function StandingsTable({ standings, highlightTop = 2 }: { standings: WCStanding[]; highlightTop?: number }): React.JSX.Element {
+function StandingsTable({ standings, highlightTop = 2, qualifyingThirdIds }: {
+  standings: StandingRow[];
+  highlightTop?: number;
+  qualifyingThirdIds?: Set<string>;
+}): React.JSX.Element {
   return (
     <View>
       <View style={stS.header}>
@@ -108,13 +115,13 @@ function StandingsTable({ standings, highlightTop = 2 }: { standings: WCStanding
       </View>
       {standings.map((st, idx) => {
         const qualify = idx < highlightTop;
-        const thirdQualifies = idx === 2 && QUALIFYING_THIRDS.has(st.team.id);
+        const thirdQualifies = idx === 2 && (qualifyingThirdIds?.has(st.team.id) ?? false);
         const pct = st.played > 0 ? Math.round((st.won / st.played) * 100) : 0;
         return (
           <View key={st.team.id} style={[stS.row, idx < standings.length - 1 && stS.rowBorder, qualify && stS.rowQ, thirdQualifies && stS.rowT3]}>
             <View style={stS.posCol}><Text style={[stS.pos, qualify && stS.posQ, thirdQualifies && stS.posT3]}>{idx + 1}</Text></View>
             <View style={stS.teamCell}>
-              <Text style={stS.flag}>{st.team.flag}</Text>
+              <Text style={stS.flag}>{st.team.flagEmoji}</Text>
               <Text style={stS.name} numberOfLines={1}>{st.team.name}</Text>
             </View>
             <View style={stS.numCol}><Text style={stS.pts}>{st.points}</Text></View>
@@ -169,11 +176,9 @@ const stS = StyleSheet.create({
 
 // ─── Round matches panel ──────────────────────────────────────────────────────
 
-function MatchesPanel({ groupId }: { groupId: string }): React.JSX.Element {
+function MatchesPanel({ group }: { group: ApiGroup }): React.JSX.Element {
   const [round, setRound] = useState<1 | 2 | 3>(1);
-  const group = GROUPS.find((g) => g.id === groupId)!;
-  const matches = group.matches.filter((m) => m.round === round);
-  const ridx = round - 1;
+  const matches = group.matches.filter((m) => m.round === `R${round}`);
 
   return (
     <View style={mpS.wrap}>
@@ -181,7 +186,7 @@ function MatchesPanel({ groupId }: { groupId: string }): React.JSX.Element {
         <TouchableOpacity onPress={() => round > 1 && setRound((round - 1) as 1|2|3)} disabled={round === 1} style={mpS.arr} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={16} color={round > 1 ? Colors.accentGold : Colors.border} />
         </TouchableOpacity>
-        <Text style={mpS.roundLbl}>{ridx + 1}ª Rodada</Text>
+        <Text style={mpS.roundLbl}>{round}ª Rodada</Text>
         <TouchableOpacity onPress={() => round < 3 && setRound((round + 1) as 1|2|3)} disabled={round === 3} style={mpS.arr} activeOpacity={0.7}>
           <Ionicons name="chevron-forward" size={16} color={round < 3 ? Colors.accentGold : Colors.border} />
         </TouchableOpacity>
@@ -189,20 +194,20 @@ function MatchesPanel({ groupId }: { groupId: string }): React.JSX.Element {
       {matches.map((m) => (
         <View key={m.id} style={mpS.card}>
           <Text style={mpS.venue} numberOfLines={1}>{m.venue}</Text>
-          <Text style={mpS.date}>{fmtDate(m.date)} · {m.time}</Text>
+          <Text style={mpS.date}>{fmtDate(m.matchDate)} · {m.matchDate.substring(11, 16)}</Text>
           <View style={mpS.row}>
             <View style={mpS.side}>
-              <Text style={mpS.mFlag}>{m.home.flag}</Text>
-              <Text style={mpS.mTeam} numberOfLines={2}>{m.home.name}</Text>
+              <Text style={mpS.mFlag}>{m.homeTeam?.flagEmoji ?? ''}</Text>
+              <Text style={mpS.mTeam} numberOfLines={2}>{m.homeTeam?.name ?? '?'}</Text>
             </View>
             <View style={mpS.scoreBox}>
               {m.homeScore !== null && m.awayScore !== null
                 ? <Text style={mpS.score}>{m.homeScore} – {m.awayScore}</Text>
-                : <View style={mpS.timeBox}><Text style={mpS.time}>{m.time}</Text></View>}
+                : <View style={mpS.timeBox}><Text style={mpS.time}>{m.matchDate.substring(11, 16)}</Text></View>}
             </View>
             <View style={[mpS.side, mpS.sideAway]}>
-              <Text style={mpS.mTeam} numberOfLines={2}>{m.away.name}</Text>
-              <Text style={mpS.mFlag}>{m.away.flag}</Text>
+              <Text style={mpS.mTeam} numberOfLines={2}>{m.awayTeam?.name ?? '?'}</Text>
+              <Text style={mpS.mFlag}>{m.awayTeam?.flagEmoji ?? ''}</Text>
             </View>
           </View>
         </View>
@@ -229,37 +234,28 @@ const mpS = StyleSheet.create({
   time: { fontSize: FontSizes.sm, fontWeight: FontWeights.bold, color: Colors.textPrimary },
 });
 
-// ─── Group block (used in FASE DE GRUPOS) ────────────────────────────────────
+// ─── Group block ──────────────────────────────────────────────────────────────
 
-function GroupBlock({ groupId }: { groupId: string }): React.JSX.Element {
-  const group = GROUPS.find((g) => g.id === groupId)!;
-  const standings = ALL_STANDINGS.get(groupId) ?? computeGroupStandings(group);
-
+function GroupBlock({ group, qualifyingThirdIds }: { group: ApiGroup; qualifyingThirdIds: Set<string> }): React.JSX.Element {
   return (
     <View style={gbS.card}>
       <View style={gbS.header}>
         <Text style={gbS.title}>{group.name}</Text>
-        <Text style={gbS.flags}>{group.teams.map((t) => t.flag).join('  ')}</Text>
+        <Text style={gbS.flags}>{group.teams.map((t) => t.flagEmoji).join('  ')}</Text>
       </View>
       {IS_WIDE ? (
         <View style={gbS.split}>
-          <View style={gbS.left}><StandingsTable standings={standings} /></View>
+          <View style={gbS.left}><StandingsTable standings={group.standings} qualifyingThirdIds={qualifyingThirdIds} /></View>
           <View style={gbS.divider} />
-          <View style={gbS.right}><MatchesPanel groupId={groupId} /></View>
+          <View style={gbS.right}><MatchesPanel group={group} /></View>
         </View>
       ) : (
         <>
-          <StandingsTable standings={standings} />
+          <StandingsTable standings={group.standings} qualifyingThirdIds={qualifyingThirdIds} />
           <View style={{ height: 1, backgroundColor: Colors.border }} />
-          <MatchesPanel groupId={groupId} />
+          <MatchesPanel group={group} />
         </>
       )}
-      <View style={gbS.legend}>
-        <View style={[gbS.ldot, { backgroundColor: Colors.accentGold }]} />
-        <Text style={gbS.ltxt}>Classificados diretos</Text>
-        <View style={[gbS.ldot, { backgroundColor: Colors.success, marginLeft: 8 }]} />
-        <Text style={gbS.ltxt}>3º classificado</Text>
-      </View>
     </View>
   );
 }
@@ -272,26 +268,22 @@ const gbS = StyleSheet.create({
   left: { flex: 3 },
   divider: { width: 1, backgroundColor: Colors.border },
   right: { flex: 2 },
-  legend: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: Spacing.sm, paddingVertical: 5, borderTopWidth: 1, borderTopColor: Colors.border },
-  ldot: { width: 8, height: 8, borderRadius: 4 },
-  ltxt: { fontSize: 9, color: Colors.textSecondary },
 });
 
 // ─── FASE DE GRUPOS ───────────────────────────────────────────────────────────
 
-function FaseDeGrupos(): React.JSX.Element {
+function FaseDeGrupos({ groups, thirds }: { groups: ApiGroup[]; thirds: StandingRow[] }): React.JSX.Element {
+  const qualifyingThirdIds = new Set(thirds.slice(0, 8).map((s) => s.team.id));
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: Spacing.sm, paddingBottom: Spacing.xxl }}>
-      {GROUPS.map((g) => <GroupBlock key={g.id} groupId={g.id} />)}
+      {groups.map((g) => <GroupBlock key={g.id} group={g} qualifyingThirdIds={qualifyingThirdIds} />)}
     </ScrollView>
   );
 }
 
 // ─── TERCEIROS COLOCADOS ──────────────────────────────────────────────────────
 
-function TerceirosColocados(): React.JSX.Element {
-  const thirds = THIRD_RANKING;
-
+function TerceirosColocados({ thirds }: { thirds: StandingRow[] }): React.JSX.Element {
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
       <View style={t3S.info}>
@@ -323,7 +315,7 @@ function TerceirosColocados(): React.JSX.Element {
             <View style={t3S.rankCol}><Text style={[t3S.rank, qualifies && t3S.rankQ]}>{idx + 1}</Text></View>
             <View style={t3S.grpCol}><Text style={t3S.grp}>{st.groupId}</Text></View>
             <View style={t3S.teamCell}>
-              <Text style={t3S.flag}>{st.team.flag}</Text>
+              <Text style={t3S.flag}>{st.team.flagEmoji}</Text>
               <Text style={t3S.name} numberOfLines={1}>{st.team.name}</Text>
             </View>
             <View style={t3S.numCol}><Text style={t3S.pts}>{st.points}</Text></View>
@@ -367,18 +359,14 @@ const t3S = StyleSheet.create({
 
 // ─── CRITÉRIOS ────────────────────────────────────────────────────────────────
 
-function CriteriosView(): React.JSX.Element {
-  const criteria = getClassificationCriteria();
-  const overall: RankedStanding[] = OVERALL_RANKING;
-
+function CriteriosView({ overall }: { overall: StandingRow[] }): React.JSX.Element {
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Spacing.xxl }}>
-      {/* Criteria list */}
       <View style={crS.section}>
         <Text style={crS.sectionTitle}>Critérios de Classificação FIFA 2026</Text>
         <Text style={crS.sectionSub}>Em caso de empate de pontos, a classificação é definida nesta ordem:</Text>
       </View>
-      {criteria.map((c) => (
+      {CLASSIFICATION_CRITERIA.map((c) => (
         <View key={c.order} style={crS.criteriaRow}>
           <View style={crS.badge}><Text style={crS.badgeNum}>{c.order}</Text></View>
           <View style={{ flex: 1 }}>
@@ -390,10 +378,9 @@ function CriteriosView(): React.JSX.Element {
 
       <View style={crS.divider} />
 
-      {/* Global 48-team ranking */}
       <Text style={[crS.sectionTitle, { paddingHorizontal: Spacing.md }]}>Classificação Geral — 48 Seleções</Text>
       <Text style={[crS.sectionSub, { paddingHorizontal: Spacing.md, marginBottom: Spacing.sm }]}>
-        Ordenação global por pontos → saldo → gols. Atualiza automaticamente conforme os resultados.
+        Ordenação global por pontos → saldo → gols. Atualiza conforme os resultados.
       </Text>
 
       <View style={crS.tableHeader}>
@@ -415,7 +402,7 @@ function CriteriosView(): React.JSX.Element {
           <View style={crS.oRankCol}><Text style={crS.oRank}>{idx + 1}</Text></View>
           <View style={crS.oGrpCol}><Text style={crS.oGrp}>{st.groupId}</Text></View>
           <View style={crS.oTeamCell}>
-            <Text style={crS.oFlag}>{st.team.flag}</Text>
+            <Text style={crS.oFlag}>{st.team.flagEmoji}</Text>
             <Text style={crS.oName} numberOfLines={1}>{st.team.name}</Text>
           </View>
           <View style={crS.oNumCol}><Text style={crS.opts}>{st.points}</Text></View>
@@ -459,9 +446,9 @@ const crS = StyleSheet.create({
 
 // ─── MATA-MATA ────────────────────────────────────────────────────────────────
 
-function MataMataView(): React.JSX.Element {
+function MataMataView({ bracket }: { bracket: BracketMatch[] }): React.JSX.Element {
   const [koRound, setKoRound] = useState<KnockoutRound>('r32');
-  const matches = BRACKET.filter((m) => m.round === koRound);
+  const matches = bracket.filter((m) => m.round === koRound);
   const ridx = KNOCKOUT_ROUNDS.indexOf(koRound);
 
   return (
@@ -496,15 +483,17 @@ function MataMataView(): React.JSX.Element {
         )}
 
         <View style={IS_WIDE ? mmS.grid : undefined}>
-          {matches.map((m: ResolvedKnockoutMatch) => (
+          {matches.map((m: BracketMatch) => (
             <View key={m.id} style={[mmS.card, IS_WIDE && mmS.cardWide]}>
               <View style={mmS.cardHeader}>
                 <Text style={mmS.matchNum}>Jogo {m.matchNumber}</Text>
-                {m.date && <Text style={mmS.matchDate}>{fmtDate(m.date)}</Text>}
+                {m.matchDate && <Text style={mmS.matchDate}>{fmtDate(m.matchDate)}</Text>}
               </View>
               <View style={mmS.matchBody}>
                 <View style={mmS.slot}>
-                  {m.homeTeam ? (<><Text style={mmS.slotFlag}>{m.homeTeam.flag}</Text><Text style={mmS.slotName}>{m.homeTeam.name}</Text></>) : (<Text style={mmS.slotTbd}>{m.homeSlot}</Text>)}
+                  {m.homeTeam
+                    ? (<><Text style={mmS.slotFlag}>{m.homeTeam.flagEmoji}</Text><Text style={mmS.slotName}>{m.homeTeam.name}</Text></>)
+                    : (<Text style={mmS.slotTbd}>{m.homeSlot}</Text>)}
                 </View>
                 <View style={mmS.vs}>
                   {m.homeScore !== null && m.awayScore !== null
@@ -512,10 +501,12 @@ function MataMataView(): React.JSX.Element {
                     : <Text style={mmS.vsText}>×</Text>}
                 </View>
                 <View style={[mmS.slot, mmS.slotAway]}>
-                  {m.awayTeam ? (<><Text style={mmS.slotFlag}>{m.awayTeam.flag}</Text><Text style={mmS.slotName}>{m.awayTeam.name}</Text></>) : (<Text style={mmS.slotTbd}>{m.awaySlot}</Text>)}
+                  {m.awayTeam
+                    ? (<><Text style={mmS.slotFlag}>{m.awayTeam.flagEmoji}</Text><Text style={mmS.slotName}>{m.awayTeam.name}</Text></>)
+                    : (<Text style={mmS.slotTbd}>{m.awaySlot}</Text>)}
                 </View>
               </View>
-              {m.venue && <Text style={mmS.venue}>{m.venue} · {m.city}</Text>}
+              {m.venue && <Text style={mmS.venue}>{m.venue}</Text>}
             </View>
           ))}
         </View>
@@ -556,16 +547,60 @@ const mmS = StyleSheet.create({
 
 export default function TabelasScreen(): React.JSX.Element {
   const [phase, setPhase] = useState<Phase>('grupos');
+  const [data, setData] = useState<StandingsData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadData = useCallback(async (): Promise<void> => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const result = await getStandingsData();
+      setData(result);
+    } catch {
+      setError('Erro ao carregar classificações. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
   return (
     <View style={{ flex: 1, backgroundColor: Colors.backgroundAlt }}>
       <ScreenHeader title="Tabelas" subtitle="Copa do Mundo FIFA 2026" />
       <PhaseNav phase={phase} onChange={setPhase} />
       <View style={{ flex: 1 }}>
-        {phase === 'grupos'    && <FaseDeGrupos />}
-        {phase === 'terceiros' && <TerceirosColocados />}
-        {phase === 'criterios' && <CriteriosView />}
-        {phase === 'matamata'  && <MataMataView />}
+        {isLoading ? (
+          <View style={rootS.center}>
+            <ActivityIndicator size="large" color={Colors.accentGold} />
+            <Text style={rootS.loadingText}>Carregando classificações...</Text>
+          </View>
+        ) : error !== '' ? (
+          <View style={rootS.center}>
+            <Text style={rootS.errorText}>{error}</Text>
+            <TouchableOpacity style={rootS.retryBtn} onPress={loadData} activeOpacity={0.8}>
+              <Text style={rootS.retryTxt}>Tentar novamente</Text>
+            </TouchableOpacity>
+          </View>
+        ) : data !== null ? (
+          <>
+            {phase === 'grupos'    && <FaseDeGrupos groups={data.groups} thirds={data.thirds} />}
+            {phase === 'terceiros' && <TerceirosColocados thirds={data.thirds} />}
+            {phase === 'criterios' && <CriteriosView overall={data.overall} />}
+            {phase === 'matamata'  && <MataMataView bracket={data.bracket} />}
+          </>
+        ) : null}
       </View>
     </View>
   );
 }
+const rootS = StyleSheet.create({
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md },
+  loadingText: { fontSize: FontSizes.sm, color: Colors.textSecondary, fontWeight: FontWeights.medium },
+  errorText: { fontSize: FontSizes.md, color: Colors.error, textAlign: 'center', paddingHorizontal: Spacing.xl },
+  retryBtn: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, backgroundColor: Colors.accentGold },
+  retryTxt: { color: Colors.background, fontWeight: FontWeights.bold, fontSize: FontSizes.sm },
+});
