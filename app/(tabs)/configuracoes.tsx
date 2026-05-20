@@ -23,12 +23,8 @@ interface MenuItemConfig {
   onPress: () => void;
 }
 
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join('');
+function getInitials(nickname: string): string {
+  return nickname.slice(0, 2).toUpperCase();
 }
 
 export default function ConfiguracoesScreen(): React.JSX.Element {
@@ -58,9 +54,7 @@ export default function ConfiguracoesScreen(): React.JSX.Element {
       id: 'password',
       label: 'Alterar Senha',
       icon: 'lock-closed-outline',
-      onPress: () => {
-        Alert.alert('Em breve', 'Funcionalidade disponível na próxima versão.');
-      },
+      onPress: () => router.push('/change-password'),
     },
     {
       id: 'notifications',
@@ -87,7 +81,7 @@ export default function ConfiguracoesScreen(): React.JSX.Element {
     },
   ];
 
-  const initials = user ? getInitials(user.name) : '?';
+  const initials = user ? getInitials(user.nickname) : '?';
 
   return (
     <View style={styles.container}>
@@ -102,8 +96,8 @@ export default function ConfiguracoesScreen(): React.JSX.Element {
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.userName}>{user?.name ?? 'Usuário'}</Text>
-            <Text style={styles.userEmail}>{user?.email ?? ''}</Text>
+            <Text style={styles.userName}>{user?.nickname ?? 'Usuário'}</Text>
+            <Text style={styles.userEmail}>@{user?.nickname?.toLowerCase() ?? ''}</Text>
           </View>
         </View>
 

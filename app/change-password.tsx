@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,62 +9,50 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { Colors, FontSizes, FontWeights, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 
-export default function LoginScreen(): React.JSX.Element {
-  const [nickname, setNickname] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+export default function ChangePasswordScreen(): React.JSX.Element {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login, isAuthenticated, isLoading, mustChangePassword } = useAuth();
+  const { user, changePassword, mustChangePassword } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      if (mustChangePassword) {
-        router.replace('/change-password');
-      } else {
-        router.replace('/(tabs)/jogos');
-      }
-    }
-  }, [isLoading, isAuthenticated, mustChangePassword, router]);
-
-  async function handleLogin(): Promise<void> {
+  async function handleSubmit(): Promise<void> {
     setErrorMsg('');
 
-    if (!nickname.trim() || !password.trim()) {
-      setErrorMsg('Nickname e senha são obrigatórios.');
+    if (!newPassword.trim()) {
+      setErrorMsg('Nova senha é obrigatória.');
+      return;
+    }
+
+    if (newPassword.length < 4) {
+      setErrorMsg('Senha deve ter ao menos 4 caracteres.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setErrorMsg('As senhas não coincidem.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const result = await login({ nickname: nickname.trim(), password });
-      if (result.mustChangePassword) {
-        router.replace('/change-password');
-      } else {
-        router.replace('/(tabs)/jogos');
-      }
+      await changePassword(newPassword);
+      router.replace('/(tabs)/jogos');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erro ao fazer login.';
+      const message = err instanceof Error ? err.message : 'Erro ao alterar senha.';
       setErrorMsg(message);
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.accentGold} />
-      </View>
-    );
   }
 
   return (
@@ -72,67 +60,76 @@ export default function LoginScreen(): React.JSX.Element {
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <SafeAreaView style={styles.safeArea}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.replace('/landing')}>
-          <Ionicons name="chevron-back" size={20} color={Colors.textSecondary} />
-          <Text style={styles.backText}>Início</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.header}>
-          <View style={styles.logoWrap}>
-            <Text style={styles.logo}>⚽</Text>
-          </View>
-          <Text style={styles.appName}>Bolão Covil</Text>
-          <Text style={styles.tagline}>Copa do Mundo 2026</Text>
+        <View style={styles.iconWrap}>
+          <Ionicons name="lock-open-outline" size={40} color={Colors.accentGold} />
         </View>
 
+        <Text style={styles.heading}>
+          {mustChangePassword ? 'Crie sua senha' : 'Alterar senha'}
+        </Text>
+        <Text style={styles.subheading}>
+          {mustChangePassword
+            ? `Olá, ${user?.nickname ?? ''}! Defina sua senha pessoal para continuar.`
+            : 'Digite e confirme sua nova senha.'}
+        </Text>
+
         <View style={styles.card}>
-          <Text style={styles.title}>Entrar</Text>
-
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Nickname</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Seu nickname"
-              placeholderTextColor={Colors.textSecondary}
-              value={nickname}
-              onChangeText={(v) => {
-                setNickname(v);
-                setErrorMsg('');
-              }}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="next"
-            />
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Senha</Text>
+            <Text style={styles.label}>Nova senha</Text>
             <View style={styles.passwordRow}>
               <TextInput
                 style={[styles.input, styles.passwordInput]}
-                placeholder="••••••"
+                placeholder="Mínimo 4 caracteres"
                 placeholderTextColor={Colors.textSecondary}
-                value={password}
+                value={newPassword}
                 onChangeText={(v) => {
-                  setPassword(v);
+                  setNewPassword(v);
                   setErrorMsg('');
                 }}
-                secureTextEntry={!showPassword}
-                returnKeyType="done"
-                onSubmitEditing={handleLogin}
+                secureTextEntry={!showNew}
+                returnKeyType="next"
               />
               <TouchableOpacity
                 style={styles.eyeBtn}
-                onPress={() => setShowPassword((p) => !p)}
+                onPress={() => setShowNew((p) => !p)}
                 activeOpacity={0.7}
               >
                 <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  name={showNew ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={Colors.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Confirmar senha</Text>
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder="Repita a senha"
+                placeholderTextColor={Colors.textSecondary}
+                value={confirmPassword}
+                onChangeText={(v) => {
+                  setConfirmPassword(v);
+                  setErrorMsg('');
+                }}
+                secureTextEntry={!showConfirm}
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowConfirm((p) => !p)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={showConfirm ? 'eye-off-outline' : 'eye-outline'}
                   size={20}
                   color={Colors.textSecondary}
                 />
@@ -147,18 +144,23 @@ export default function LoginScreen(): React.JSX.Element {
           )}
 
           <TouchableOpacity
-            style={[styles.loginBtn, isSubmitting && styles.loginBtnDisabled]}
-            onPress={handleLogin}
+            style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
+            onPress={handleSubmit}
             disabled={isSubmitting}
             activeOpacity={0.8}
           >
             {isSubmitting ? (
               <ActivityIndicator size="small" color={Colors.background} />
             ) : (
-              <Text style={styles.loginBtnText}>Entrar</Text>
+              <Text style={styles.submitBtnText}>Salvar senha</Text>
             )}
           </TouchableOpacity>
         </View>
+
+        <Text style={styles.hint}>
+          Sua senha é armazenada de forma criptografada.{'\n'}
+          Ninguém além de você terá acesso.
+        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -169,61 +171,37 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  safeArea: {
-    backgroundColor: Colors.background,
-  },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: 4,
-  },
-  backText: {
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-  },
-  logoWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(5,150,105,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.darkGreen,
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     padding: Spacing.lg,
   },
-  header: {
+  iconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
     alignItems: 'center',
-    marginBottom: Spacing.xl,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
   },
-  logo: {
-    fontSize: 56,
-    marginBottom: Spacing.sm,
-  },
-  appName: {
+  heading: {
     fontSize: FontSizes.xxl,
     fontWeight: FontWeights.bold,
-    color: Colors.accentGold,
-    letterSpacing: 1,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: Spacing.xs,
   },
-  tagline: {
+  subheading: {
     fontSize: FontSizes.sm,
     color: Colors.textSecondary,
-    marginTop: Spacing.xs,
-    letterSpacing: 0.5,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: Spacing.xl,
+    paddingHorizontal: Spacing.md,
   },
   card: {
     backgroundColor: Colors.surface,
@@ -232,12 +210,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     ...Shadows.lg,
-  },
-  title: {
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.bold,
-    color: Colors.textPrimary,
-    marginBottom: Spacing.lg,
   },
   fieldGroup: {
     marginBottom: Spacing.md,
@@ -292,7 +264,7 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.sm,
     fontWeight: FontWeights.medium,
   },
-  loginBtn: {
+  submitBtn: {
     backgroundColor: Colors.accentGold,
     borderRadius: BorderRadius.md,
     paddingVertical: Spacing.md,
@@ -300,13 +272,21 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
     ...Shadows.sm,
   },
-  loginBtnDisabled: {
+  submitBtnDisabled: {
     opacity: 0.6,
   },
-  loginBtnText: {
+  submitBtnText: {
     color: Colors.background,
     fontSize: FontSizes.md,
     fontWeight: FontWeights.bold,
     letterSpacing: 0.5,
+  },
+  hint: {
+    marginTop: Spacing.lg,
+    fontSize: FontSizes.xs,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+    opacity: 0.7,
   },
 });

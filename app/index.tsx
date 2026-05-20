@@ -5,18 +5,22 @@ import { useAuth } from '@/hooks/useAuth';
 import { Colors } from '@/constants/theme';
 
 export default function Index(): React.JSX.Element {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, mustChangePassword } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!isLoading) {
       if (isAuthenticated) {
-        router.replace('/(tabs)/jogos');
+        if (mustChangePassword) {
+          router.replace('/change-password');
+        } else {
+          router.replace('/(tabs)/jogos');
+        }
       } else {
         router.replace('/landing');
       }
     }
-  }, [isLoading, isAuthenticated, router]);
+  }, [isLoading, isAuthenticated, mustChangePassword, router]);
 
   return (
     <View style={styles.container}>

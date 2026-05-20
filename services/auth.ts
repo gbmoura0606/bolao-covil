@@ -1,42 +1,84 @@
-import type { LoginCredentials, User } from '@/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ALLOWED_USERS, DEFAULT_PASSWORD } from '@/constants/users';
+import type { User, LoginCredentials, UserAuthData } from '@/types';
 
-const MOCK_USER: User = {
-  id: 'user-001',
-  email: 'admin@bolao.com',
-  name: 'Admin Bolão',
-  createdAt: new Date().toISOString(),
-};
+const AUTH_KEY = (nickname: string) => `@bolao:auth:${nickname}`;
 
-function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+async function hashPassword(password: string, salt: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(`${salt}:${password}:bolao`);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
-export async function mockLogin(credentials: LoginCredentials): Promise<User> {
-  await new Promise((resolve) => setTimeout(resolve, 800));
+function generateSalt(): string {
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return Array.from(array)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
-  const { email, password } = credentials;
+export async function login(
+  credentials: LoginCredentials
+): Promise<{ user: User; mustChangePassword: boolean }> {
+  const { nickname, password } = credentials;
 
-  if (!email.trim() || !password.trim()) {
-    throw new Error('E-mail e senha são obrigatórios.');
+  const matched = ALLOWED_USERS.find(
+    (u) => u.toLowerCase() === nickname.trim().toLowerCase()
+  );
+
+  if (!matched) {
+    throw new Error('Usuário não encontrado.');
   }
 
-  if (!isValidEmail(email)) {
-    throw new Error('Formato de e-mail inválido.');
-  }
+  const storedRaw = await AsyncStorage.getItem(AUTH_KEY(matched));
 
-  if (email === 'admin@bolao.com' && password === '123456') {
-    return { ...MOCK_USER, email };
-  }
-
-  if (email.trim() && password.trim()) {
-    return {
-      ...MOCK_USER,
-      id: `user-${Date.now()}`,
-      email: email.trim(),
-      name: email.split('@')[0] ?? 'Usuário',
+  if (!storedRaw) {
+    if (password !== DEFAULT_PASSWORD) {
+      throw new Error('Senha incorreta.');
+    }
+    const user: User = {
+      id: matched,
+      nickname: matched,
+      createdAt: new Date().toISOString(),
     };
+    return { user, mustChangePassword: true };
   }
 
-  throw new Error('Credenciais inválidas.');
+  const authData: UserAuthData = JSON.parse(storedRaw) as UserAuthData;
+  const hash = await hashPassword(password, authData.salt);
+
+  if (hash !== authData.passwordHash) {
+    throw new Error('Senha incorreta.');
+  }
+
+  const user: User = {
+    id: matched,
+    nickname: matched,
+    createdAt: new Date().toISOString(),
+  };
+  return { user, mustChangePassword: authData.mustChangePassword };
+}
+
+export async function changePassword(
+  nickname: string,
+  newPassword: string
+): Promise<void> {
+  if (newPassword.length < 4) {
+    throw new Error('Senha deve ter ao menos 4 caracteres.');
+  }
+
+  const salt = generateSalt();
+  const passwordHash = await hashPassword(newPassword, salt);
+
+  const authData: UserAuthData = {
+    passwordHash,
+    salt,
+    mustChangePassword: false,
+  };
+
+  await AsyncStorage.setItem(AUTH_KEY(nickname), JSON.stringify(authData));
 }

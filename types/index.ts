@@ -2,9 +2,7 @@ export type MatchStatus = 'OPEN' | 'CLOSED' | 'FINISHED';
 
 export interface User {
   id: string;
-  email: string;
-  name: string;
-  avatarUrl?: string;
+  nickname: string;
   createdAt: string;
 }
 
@@ -70,7 +68,7 @@ export interface UserLeague {
 }
 
 export interface LoginCredentials {
-  email: string;
+  nickname: string;
   password: string;
 }
 
@@ -78,6 +76,13 @@ export interface AuthState {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  mustChangePassword: boolean;
+}
+
+export interface UserAuthData {
+  passwordHash: string;
+  salt: string;
+  mustChangePassword: boolean;
 }
 
 export interface PredictionState {
