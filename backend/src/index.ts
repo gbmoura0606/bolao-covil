@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from '../routes/auth';
+import { seedUsers } from '../controllers/authController';
 import matchRoutes from '../routes/matches';
 import predictionRoutes from '../routes/predictions';
 import rankingRoutes from '../routes/ranking';
@@ -37,8 +38,13 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Rota não encontrada.' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Bolão Covil API running on port ${PORT}`);
-});
+async function start(): Promise<void> {
+  await seedUsers();
+  app.listen(PORT, () => {
+    console.log(`Bolão Covil API running on port ${PORT}`);
+  });
+}
+
+void start();
 
 export default app;

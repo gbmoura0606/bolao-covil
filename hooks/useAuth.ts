@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { User, AuthState, LoginCredentials } from '@/types';
 import { login as authLogin, changePassword as authChangePassword } from '@/services/auth';
+import { TOKEN_STORAGE_KEY } from '@/services/api';
 
 const SESSION_KEY = '@bolao:session';
 
@@ -43,14 +44,17 @@ export function useAuth(): AuthState & {
       user: result.user,
       mustChangePassword: result.mustChangePassword,
     };
-    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    await AsyncStorage.multiSet([
+      [SESSION_KEY, JSON.stringify(session)],
+      [TOKEN_STORAGE_KEY, result.token],
+    ]);
     setUser(result.user);
     setMustChangePassword(result.mustChangePassword);
     return { mustChangePassword: result.mustChangePassword };
   }, []);
 
   const logout = useCallback(async (): Promise<void> => {
-    await AsyncStorage.removeItem(SESSION_KEY);
+    await AsyncStorage.multiRemove([SESSION_KEY, TOKEN_STORAGE_KEY]);
     setUser(null);
     setMustChangePassword(false);
   }, []);
@@ -58,7 +62,7 @@ export function useAuth(): AuthState & {
   const changePassword = useCallback(
     async (newPassword: string): Promise<void> => {
       if (!user) throw new Error('Não autenticado.');
-      await authChangePassword(user.nickname, newPassword);
+      await authChangePassword(newPassword);
       const session: SessionData = { user, mustChangePassword: false };
       await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
       setMustChangePassword(false);

@@ -8,75 +8,74 @@ const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET ?? 'bolao-covil-secret-change-in-production';
 const JWT_EXPIRES_IN = '7d';
 
-function generateToken(userId: string, email: string): string {
-  return jwt.sign({ userId, email }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+const INITIAL_USERS = [
+  'Du', 'Manetta', 'Sunset', 'Jhow', 'Nathan', 'Lorenzo', 'Rubens', 'Peter', 'Vini',
+];
+const DEFAULT_PASSWORD = '123';
+
+function generateToken(userId: string, nickname: string): string {
+  return jwt.sign({ userId, nickname }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+}
+
+export async function seedUsers(): Promise<void> {
+  const defaultHash = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+  for (const nickname of INITIAL_USERS) {
+    await prisma.user.upsert({
+      where: { nickname },
+      update: {},
+      create: { nickname, passwordHash: defaultHash, mustChangePassword: true },
+    });
+  }
+  console.log(`[seed] ${INITIAL_USERS.length} users ensured.`);
 }
 
 export async function login(req: Request, res: Response): Promise<void> {
-  const { email, password } = req.body as { email?: string; password?: string };
+  const { nickname, password } = req.body as { nickname?: string; password?: string };
 
-  if (!email || !password) {
-    res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
+  if (!nickname || !password) {
+    res.status(400).json({ error: 'Nickname e senha são obrigatórios.' });
     return;
   }
 
   try {
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const user = await prisma.user.findUnique({ where: { nickname: nickname.trim() } });
     if (!user) {
-      res.status(401).json({ error: 'Credenciais inválidas.' });
+      res.status(401).json({ error: 'Usuário não encontrado.' });
       return;
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
-      res.status(401).json({ error: 'Credenciais inválidas.' });
+      res.status(401).json({ error: 'Senha incorreta.' });
       return;
     }
 
-    const token = generateToken(user.id, user.email);
+    const token = generateToken(user.id, user.nickname);
     res.json({
       token,
-      user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl },
+      user: { id: user.id, nickname: user.nickname, createdAt: user.createdAt },
+      mustChangePassword: user.mustChangePassword,
     });
   } catch {
     res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 }
 
-export async function register(req: Request, res: Response): Promise<void> {
-  const { email, password, name } = req.body as {
-    email?: string;
-    password?: string;
-    name?: string;
-  };
+export async function changePassword(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { newPassword } = req.body as { newPassword?: string };
 
-  if (!email || !password || !name) {
-    res.status(400).json({ error: 'Nome, e-mail e senha são obrigatórios.' });
-    return;
-  }
-
-  if (password.length < 6) {
-    res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres.' });
+  if (!newPassword || newPassword.length < 4) {
+    res.status(400).json({ error: 'Nova senha deve ter ao menos 4 caracteres.' });
     return;
   }
 
   try {
-    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (existing) {
-      res.status(409).json({ error: 'E-mail já cadastrado.' });
-      return;
-    }
-
-    const passwordHash = await bcrypt.hash(password, 12);
-    const user = await prisma.user.create({
-      data: { email: email.toLowerCase(), name: name.trim(), passwordHash },
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({
+      where: { id: req.userId },
+      data: { passwordHash, mustChangePassword: false },
     });
-
-    const token = generateToken(user.id, user.email);
-    res.status(201).json({
-      token,
-      user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl },
-    });
+    res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Erro interno do servidor.' });
   }
@@ -89,7 +88,12 @@ export async function getMe(req: AuthenticatedRequest, res: Response): Promise<v
       res.status(404).json({ error: 'Usuário não encontrado.' });
       return;
     }
-    res.json({ id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl });
+    res.json({
+      id: user.id,
+      nickname: user.nickname,
+      mustChangePassword: user.mustChangePassword,
+      createdAt: user.createdAt,
+    });
   } catch {
     res.status(500).json({ error: 'Erro interno do servidor.' });
   }

@@ -3,14 +3,14 @@ import jwt from 'jsonwebtoken';
 
 interface JwtPayload {
   userId: string;
-  email: string;
+  nickname: string;
   iat: number;
   exp: number;
 }
 
 export interface AuthenticatedRequest extends Request {
   userId?: string;
-  userEmail?: string;
+  userNickname?: string;
 }
 
 export function requireAuth(
@@ -31,7 +31,7 @@ export function requireAuth(
   try {
     const decoded = jwt.verify(token, secret) as JwtPayload;
     req.userId = decoded.userId;
-    req.userEmail = decoded.email;
+    req.userNickname = decoded.nickname;
     next();
   } catch {
     res.status(401).json({ error: 'Token inválido ou expirado.' });

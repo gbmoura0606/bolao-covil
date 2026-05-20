@@ -8,4 +8,4 @@ cmds = ["npm install --legacy-peer-deps --include=dev"]
 cmds = ["npm run build", "npx prisma generate"]
 
 [start]
-cmd = "npx prisma migrate deploy && node dist/src/index.js"
+cmd = "npx prisma db push --accept-data-loss && node dist/src/index.js"

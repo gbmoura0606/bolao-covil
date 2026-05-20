@@ -30,7 +30,7 @@ export async function getLeague(req: AuthenticatedRequest, res: Response): Promi
       where: { id },
       include: {
         _count: { select: { userLeagues: true } },
-        owner: { select: { id: true, name: true } },
+        owner: { select: { id: true, nickname: true } },
       },
     });
     if (!league) {

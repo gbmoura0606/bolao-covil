@@ -6,12 +6,28 @@ const prisma = new PrismaClient();
 
 interface RankingEntry {
   id: string;
-  name: string;
-  email: string;
+  nickname: string;
   points: number;
   exactMatches: number;
   totalPredictions: number;
   winRate: number;
+}
+
+function buildEntry(user: {
+  id: string;
+  nickname: string;
+  predictions: { points: number | null }[];
+}): RankingEntry {
+  const totalPredictions = user.predictions.length;
+  const points = user.predictions.reduce((sum, p) => sum + (p.points ?? 0), 0);
+  const exactMatches = user.predictions.filter((p) => p.points === 3).length;
+  const winRate =
+    totalPredictions > 0
+      ? Math.round(
+          (user.predictions.filter((p) => (p.points ?? 0) > 0).length / totalPredictions) * 100
+        )
+      : 0;
+  return { id: user.id, nickname: user.nickname, points, exactMatches, totalPredictions, winRate };
 }
 
 export async function getGlobalRanking(_req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -19,8 +35,7 @@ export async function getGlobalRanking(_req: AuthenticatedRequest, res: Response
     const users = await prisma.user.findMany({
       select: {
         id: true,
-        name: true,
-        email: true,
+        nickname: true,
         predictions: {
           where: { points: { not: null } },
           select: { points: true },
@@ -28,18 +43,8 @@ export async function getGlobalRanking(_req: AuthenticatedRequest, res: Response
       },
     });
 
-    const ranking: RankingEntry[] = users
-      .map((user) => {
-        const totalPredictions = user.predictions.length;
-        const points = user.predictions.reduce((sum, p) => sum + (p.points ?? 0), 0);
-        const exactMatches = user.predictions.filter((p) => p.points === 3).length;
-        const winRate =
-          totalPredictions > 0
-            ? Math.round((user.predictions.filter((p) => (p.points ?? 0) > 0).length / totalPredictions) * 100)
-            : 0;
-
-        return { id: user.id, name: user.name, email: user.email, points, exactMatches, totalPredictions, winRate };
-      })
+    const ranking = users
+      .map(buildEntry)
       .sort((a, b) => b.points - a.points || b.exactMatches - a.exactMatches);
 
     res.json(ranking);
@@ -58,8 +63,7 @@ export async function getLeagueRanking(req: AuthenticatedRequest, res: Response)
         user: {
           select: {
             id: true,
-            name: true,
-            email: true,
+            nickname: true,
             predictions: {
               where: { points: { not: null } },
               select: { points: true },
@@ -69,18 +73,8 @@ export async function getLeagueRanking(req: AuthenticatedRequest, res: Response)
       },
     });
 
-    const ranking: RankingEntry[] = userLeagues
-      .map(({ user }) => {
-        const totalPredictions = user.predictions.length;
-        const points = user.predictions.reduce((sum, p) => sum + (p.points ?? 0), 0);
-        const exactMatches = user.predictions.filter((p) => p.points === 3).length;
-        const winRate =
-          totalPredictions > 0
-            ? Math.round((user.predictions.filter((p) => (p.points ?? 0) > 0).length / totalPredictions) * 100)
-            : 0;
-
-        return { id: user.id, name: user.name, email: user.email, points, exactMatches, totalPredictions, winRate };
-      })
+    const ranking = userLeagues
+      .map(({ user }) => buildEntry(user))
       .sort((a, b) => b.points - a.points || b.exactMatches - a.exactMatches);
 
     res.json(ranking);
