@@ -4,6 +4,7 @@ import {
   Dimensions, Platform, UIManager, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { FlagImage } from '@/components/FlagImage';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { getStandingsData } from '@/services/standings';
 import type { StandingsData, StandingRow, ApiGroup, BracketMatch } from '@/services/standings';
@@ -121,7 +122,7 @@ function StandingsTable({ standings, highlightTop = 2, qualifyingThirdIds }: {
           <View key={st.team.id} style={[stS.row, idx < standings.length - 1 && stS.rowBorder, qualify && stS.rowQ, thirdQualifies && stS.rowT3]}>
             <View style={stS.posCol}><Text style={[stS.pos, qualify && stS.posQ, thirdQualifies && stS.posT3]}>{idx + 1}</Text></View>
             <View style={stS.teamCell}>
-              <Text style={stS.flag}>{st.team.flagEmoji}</Text>
+              <FlagImage country={st.team.country} height={16} />
               <Text style={stS.name} numberOfLines={1}>{st.team.name}</Text>
             </View>
             <View style={stS.numCol}><Text style={stS.pts}>{st.points}</Text></View>
@@ -197,7 +198,7 @@ function MatchesPanel({ group }: { group: ApiGroup }): React.JSX.Element {
           <Text style={mpS.date}>{fmtDate(m.matchDate)} · {m.matchDate.substring(11, 16)}</Text>
           <View style={mpS.row}>
             <View style={mpS.side}>
-              <Text style={mpS.mFlag}>{m.homeTeam?.flagEmoji ?? ''}</Text>
+              {m.homeTeam && <FlagImage country={m.homeTeam.country} height={22} />}
               <Text style={mpS.mTeam} numberOfLines={2}>{m.homeTeam?.name ?? '?'}</Text>
             </View>
             <View style={mpS.scoreBox}>
@@ -207,7 +208,7 @@ function MatchesPanel({ group }: { group: ApiGroup }): React.JSX.Element {
             </View>
             <View style={[mpS.side, mpS.sideAway]}>
               <Text style={mpS.mTeam} numberOfLines={2}>{m.awayTeam?.name ?? '?'}</Text>
-              <Text style={mpS.mFlag}>{m.awayTeam?.flagEmoji ?? ''}</Text>
+              {m.awayTeam && <FlagImage country={m.awayTeam.country} height={22} />}
             </View>
           </View>
         </View>
@@ -216,7 +217,7 @@ function MatchesPanel({ group }: { group: ApiGroup }): React.JSX.Element {
   );
 }
 const mpS = StyleSheet.create({
-  wrap: { flex: 1 },
+  wrap: { flex: 1, alignSelf: 'stretch' },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.xs, paddingVertical: Spacing.sm, backgroundColor: Colors.backgroundAlt, borderBottomWidth: 1, borderBottomColor: Colors.border },
   arr: { width: 32, alignItems: 'center' },
   roundLbl: { fontSize: FontSizes.sm, fontWeight: FontWeights.bold, color: Colors.textPrimary },
@@ -241,7 +242,9 @@ function GroupBlock({ group, qualifyingThirdIds }: { group: ApiGroup; qualifying
     <View style={gbS.card}>
       <View style={gbS.header}>
         <Text style={gbS.title}>{group.name}</Text>
-        <Text style={gbS.flags}>{group.teams.map((t) => t.flagEmoji).join('  ')}</Text>
+        <View style={gbS.flagsRow}>
+          {group.teams.map((t) => <FlagImage key={t.id} country={t.country} height={16} />)}
+        </View>
       </View>
       {IS_WIDE ? (
         <View style={gbS.split}>
@@ -264,10 +267,11 @@ const gbS = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.backgroundAlt, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderBottomWidth: 2, borderBottomColor: Colors.accentGold },
   title: { fontSize: FontSizes.md, fontWeight: FontWeights.bold, color: Colors.accentGold },
   flags: { fontSize: 16 },
-  split: { flexDirection: 'row' },
+  split: { flexDirection: 'row', alignItems: 'stretch' },
   left: { flex: 3 },
   divider: { width: 1, backgroundColor: Colors.border },
-  right: { flex: 2 },
+  right: { flex: 2, alignSelf: 'stretch' },
+  flagsRow: { flexDirection: 'row', gap: 4 },
 });
 
 // ─── FASE DE GRUPOS ───────────────────────────────────────────────────────────
@@ -315,7 +319,7 @@ function TerceirosColocados({ thirds }: { thirds: StandingRow[] }): React.JSX.El
             <View style={t3S.rankCol}><Text style={[t3S.rank, qualifies && t3S.rankQ]}>{idx + 1}</Text></View>
             <View style={t3S.grpCol}><Text style={t3S.grp}>{st.groupId}</Text></View>
             <View style={t3S.teamCell}>
-              <Text style={t3S.flag}>{st.team.flagEmoji}</Text>
+              <FlagImage country={st.team.country} height={16} />
               <Text style={t3S.name} numberOfLines={1}>{st.team.name}</Text>
             </View>
             <View style={t3S.numCol}><Text style={t3S.pts}>{st.points}</Text></View>
@@ -402,7 +406,7 @@ function CriteriosView({ overall }: { overall: StandingRow[] }): React.JSX.Eleme
           <View style={crS.oRankCol}><Text style={crS.oRank}>{idx + 1}</Text></View>
           <View style={crS.oGrpCol}><Text style={crS.oGrp}>{st.groupId}</Text></View>
           <View style={crS.oTeamCell}>
-            <Text style={crS.oFlag}>{st.team.flagEmoji}</Text>
+            <FlagImage country={st.team.country} height={15} />
             <Text style={crS.oName} numberOfLines={1}>{st.team.name}</Text>
           </View>
           <View style={crS.oNumCol}><Text style={crS.opts}>{st.points}</Text></View>
@@ -492,7 +496,7 @@ function MataMataView({ bracket }: { bracket: BracketMatch[] }): React.JSX.Eleme
               <View style={mmS.matchBody}>
                 <View style={mmS.slot}>
                   {m.homeTeam
-                    ? (<><Text style={mmS.slotFlag}>{m.homeTeam.flagEmoji}</Text><Text style={mmS.slotName}>{m.homeTeam.name}</Text></>)
+                    ? (<><FlagImage country={m.homeTeam.country} height={24} /><Text style={mmS.slotName}>{m.homeTeam.name}</Text></>)
                     : (<Text style={mmS.slotTbd}>{m.homeSlot}</Text>)}
                 </View>
                 <View style={mmS.vs}>
@@ -502,7 +506,7 @@ function MataMataView({ bracket }: { bracket: BracketMatch[] }): React.JSX.Eleme
                 </View>
                 <View style={[mmS.slot, mmS.slotAway]}>
                   {m.awayTeam
-                    ? (<><Text style={mmS.slotFlag}>{m.awayTeam.flagEmoji}</Text><Text style={mmS.slotName}>{m.awayTeam.name}</Text></>)
+                    ? (<><FlagImage country={m.awayTeam.country} height={24} /><Text style={mmS.slotName}>{m.awayTeam.name}</Text></>)
                     : (<Text style={mmS.slotTbd}>{m.awaySlot}</Text>)}
                 </View>
               </View>

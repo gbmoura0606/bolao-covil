@@ -42,7 +42,7 @@ export default function ConfiguracoesScreen(): React.JSX.Element {
           style: 'destructive',
           onPress: async () => {
             await logout();
-            router.replace('/login');
+            router.replace('/landing');
           },
         },
       ]
