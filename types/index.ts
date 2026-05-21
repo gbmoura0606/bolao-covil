@@ -58,6 +58,9 @@ export interface League {
   firstPlaceName?: string;
   emoji?: string;
   createdAt: string;
+  scoreResult: number;
+  scoreGoalDiff: number;
+  scoreExact: number;
 }
 
 export interface UserLeague {
