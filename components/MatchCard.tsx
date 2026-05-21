@@ -1,147 +1,226 @@
-import React, { useState } from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   TextInput,
+  TouchableOpacity,
   StyleSheet,
-  Animated,
+  ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { FlagImage } from '@/components/FlagImage';
 import { Colors, FontSizes, FontWeights, Spacing, BorderRadius, Shadows } from '@/constants/theme';
-import { StatusBadge } from './StatusBadge';
 import type { Match } from '@/types';
+import type { PredictionEdit } from '@/hooks/usePredictions';
 
-interface MatchCardProps {
+export interface MatchCardProps {
   match: Match;
-  homeScore: string;
-  awayScore: string;
-  submitted: boolean;
+  prediction: PredictionEdit | undefined;
   onUpdateScore: (team: 'home' | 'away', value: string) => void;
-  onSubmit: () => void;
+  onRetry: () => void;
 }
 
-export function MatchCard({
-  match,
-  homeScore,
-  awayScore,
-  submitted,
-  onUpdateScore,
-  onSubmit,
-}: MatchCardProps): React.JSX.Element {
-  const [expanded, setExpanded] = useState(false);
-  const canPredict = match.status === 'OPEN';
+const ROUND_LABEL: Record<string, string> = {
+  R1: '1ª Rodada', R2: '2ª Rodada', R3: '3ª Rodada',
+  r32: 'Rodada de 32', r16: 'Oitavas', qf: 'Quartas', sf: 'Semifinal',
+  final: 'Final', terceiro: '3º Lugar',
+};
 
-  function formatDate(dateStr: string): string {
-    const [year, month, day] = dateStr.split('-');
-    return `${day}/${month}/${year}`;
+function fmtSavedAt(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function getPointsInfo(
+  predHome: number, predAway: number,
+  realHome: number, realAway: number,
+): { label: string; color: string; icon: string } {
+  if (predHome === realHome && predAway === realAway) {
+    return { label: 'placar exato', color: Colors.accentGold, icon: 'trophy' };
   }
+  if (Math.sign(predHome - predAway) === Math.sign(realHome - realAway)) {
+    return { label: 'resultado certo', color: Colors.success, icon: 'football-outline' };
+  }
+  return { label: 'resultado errado', color: Colors.textSecondary, icon: 'close-circle-outline' };
+}
+
+export function MatchCard({ match, prediction, onUpdateScore, onRetry }: MatchCardProps): React.JSX.Element {
+  const awayInputRef = useRef<TextInput>(null);
+
+  const isOpen = match.status === 'OPEN';
+  const isLive = match.status === 'CLOSED';
+  const isFinished = match.status === 'FINISHED';
+
+  const homeScore = prediction?.homeScore ?? '';
+  const awayScore = prediction?.awayScore ?? '';
+  const saveStatus = prediction?.saveStatus ?? 'idle';
+  const hasPrediction = prediction?.persistedId !== undefined;
+
+  const pointsInfo = (() => {
+    if (!isFinished || !hasPrediction) return null;
+    const pH = prediction?.persistedHomeScore;
+    const pA = prediction?.persistedAwayScore;
+    const rH = match.homeScore;
+    const rA = match.awayScore;
+    if (pH === undefined || pA === undefined || rH === undefined || rA === undefined) return null;
+    return getPointsInfo(pH, pA, rH, rA);
+  })();
 
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => {
-        if (canPredict) setExpanded((prev) => !prev);
-      }}
-      activeOpacity={0.85}
-    >
-      <View style={styles.header}>
-        <View style={styles.metaRow}>
-          <Text style={styles.round}>{match.round}</Text>
-          {match.group ? <Text style={styles.group}>{match.group}</Text> : null}
+    <View style={[styles.card, isLive && styles.cardLive]}>
+
+      {/* Meta row */}
+      <View style={styles.meta}>
+        <View style={styles.metaBadge}>
+          {isLive && (
+            <View style={styles.liveBadge}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>AO VIVO</Text>
+            </View>
+          )}
+          {isFinished && (
+            <View style={styles.finishedBadge}>
+              <Ionicons name="checkmark-circle-outline" size={11} color={Colors.textSecondary} />
+              <Text style={styles.finishedText}>ENCERRADO</Text>
+            </View>
+          )}
+          {isOpen && (
+            <View style={styles.openBadge}>
+              <View style={styles.openDot} />
+              <Text style={styles.openText}>ABERTO</Text>
+            </View>
+          )}
         </View>
-        <StatusBadge status={match.status} />
+        <Text style={styles.metaInfo} numberOfLines={1}>
+          {match.group ? `Grupo ${match.group} · ` : ''}{ROUND_LABEL[match.round] ?? match.round}
+        </Text>
       </View>
 
-      <View style={styles.teams}>
-        <View style={styles.teamBlock}>
-          <Text style={styles.flag}>{match.homeTeam.flagEmoji}</Text>
-          <Text style={styles.teamName}>{match.homeTeam.name}</Text>
+      {/* Teams row */}
+      <View style={styles.teamsRow}>
+        <View style={styles.teamSide}>
+          <FlagImage country={match.homeTeam.country} height={34} />
+          <Text style={styles.teamName} numberOfLines={2}>{match.homeTeam.name}</Text>
         </View>
 
-        <View style={styles.scoreBlock}>
-          {match.status === 'FINISHED' ? (
-            <Text style={styles.finalScore}>
-              {match.homeScore} <Text style={styles.scoreSep}>×</Text> {match.awayScore}
+        <View style={styles.centerCol}>
+          {(isLive || isFinished) && match.homeScore !== undefined && match.awayScore !== undefined ? (
+            <Text style={[styles.score, isLive && styles.scoreLive]}>
+              {match.homeScore} – {match.awayScore}
             </Text>
           ) : (
-            <Text style={styles.vsText}>VS</Text>
+            <Text style={styles.vsText}>×</Text>
           )}
-          <Text style={styles.matchTime}>
-            {formatDate(match.matchDate)} · {match.matchTime}
-          </Text>
+          <Text style={styles.timeText}>{match.matchTime}</Text>
         </View>
 
-        <View style={[styles.teamBlock, styles.teamBlockRight]}>
-          <Text style={styles.flag}>{match.awayTeam.flagEmoji}</Text>
-          <Text style={styles.teamName}>{match.awayTeam.name}</Text>
+        <View style={[styles.teamSide, styles.teamSideRight]}>
+          <FlagImage country={match.awayTeam.country} height={34} />
+          <Text style={styles.teamName} numberOfLines={2}>{match.awayTeam.name}</Text>
         </View>
       </View>
 
-      {submitted && (
-        <View style={styles.submittedRow}>
-          <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-          <Text style={styles.submittedText}>
-            Palpite: {homeScore} × {awayScore}
-          </Text>
-        </View>
-      )}
-
-      {canPredict && !submitted && expanded && (
-        <View style={styles.predictionBox}>
-          <Text style={styles.predictionTitle}>Seu Palpite</Text>
-          <View style={styles.predictionRow}>
-            <View style={styles.scoreInputGroup}>
-              <Text style={styles.scoreInputLabel}>{match.homeTeam.name}</Text>
+      {/* Prediction row */}
+      <View style={styles.predRow}>
+        {isOpen ? (
+          <View style={styles.predOpenRow}>
+            {/* Inputs */}
+            <View style={styles.predInputGroup}>
+              <Text style={styles.predLabel}>Palpite</Text>
               <TextInput
-                style={styles.scoreInput}
+                style={[styles.input, homeScore !== '' && styles.inputFilled]}
                 value={homeScore}
-                onChangeText={(v) => onUpdateScore('home', v)}
+                onChangeText={(v) => {
+                  const c = v.replace(/[^0-9]/g, '').slice(0, 1);
+                  onUpdateScore('home', c);
+                  if (c !== '' && homeScore === '') awayInputRef.current?.focus();
+                }}
                 keyboardType="number-pad"
                 maxLength={1}
-                placeholder="0"
-                placeholderTextColor={Colors.textSecondary}
-                textAlign="center"
+                placeholder="?"
+                placeholderTextColor={Colors.border}
+                selectTextOnFocus
+              />
+              <Text style={styles.inputSep}>×</Text>
+              <TextInput
+                ref={awayInputRef}
+                style={[styles.input, awayScore !== '' && styles.inputFilled]}
+                value={awayScore}
+                onChangeText={(v) => {
+                  const c = v.replace(/[^0-9]/g, '').slice(0, 1);
+                  onUpdateScore('away', c);
+                  if (c !== '') Keyboard.dismiss();
+                }}
+                keyboardType="number-pad"
+                maxLength={1}
+                placeholder="?"
+                placeholderTextColor={Colors.border}
+                selectTextOnFocus
               />
             </View>
-            <Text style={styles.predSep}>×</Text>
-            <View style={styles.scoreInputGroup}>
-              <Text style={styles.scoreInputLabel}>{match.awayTeam.name}</Text>
-              <TextInput
-                style={styles.scoreInput}
-                value={awayScore}
-                onChangeText={(v) => onUpdateScore('away', v)}
-                keyboardType="number-pad"
-                maxLength={1}
-                placeholder="0"
-                placeholderTextColor={Colors.textSecondary}
-                textAlign="center"
-              />
+
+            {/* Save indicator */}
+            <View style={styles.saveIndicator}>
+              {saveStatus === 'saving' && (
+                <ActivityIndicator size="small" color={Colors.accentGold} />
+              )}
+              {saveStatus === 'dirty' && (
+                <Text style={styles.dotIndicator}>•••</Text>
+              )}
+              {saveStatus === 'saved' && prediction?.savedAt !== undefined && (
+                <View style={styles.savedRow}>
+                  <Ionicons name="checkmark-circle" size={13} color={Colors.success} />
+                  <Text style={styles.savedText}>Salvo {fmtSavedAt(prediction.savedAt)}</Text>
+                </View>
+              )}
+              {saveStatus === 'error' && (
+                <TouchableOpacity onPress={onRetry} activeOpacity={0.7} style={styles.errorBtn}>
+                  <Ionicons name="alert-circle" size={13} color={Colors.error} />
+                  <Text style={styles.errorText}>Erro · tentar novamente</Text>
+                </TouchableOpacity>
+              )}
+              {(saveStatus === 'idle') && (
+                <Text style={styles.hintText}>sem palpite</Text>
+              )}
             </View>
           </View>
-          <TouchableOpacity
-            style={styles.submitBtn}
-            onPress={onSubmit}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.submitBtnText}>Confirmar Palpite</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        ) : (
+          /* Locked state (CLOSED or FINISHED) */
+          <View style={styles.lockedRow}>
+            {hasPrediction &&
+              prediction?.persistedHomeScore !== undefined &&
+              prediction?.persistedAwayScore !== undefined ? (
+              <>
+                <Text style={styles.predStatic}>
+                  Palpite: {prediction.persistedHomeScore} × {prediction.persistedAwayScore}
+                </Text>
+                {isLive && (
+                  <View style={styles.lockChip}>
+                    <Ionicons name="lock-closed" size={11} color={Colors.textSecondary} />
+                    <Text style={styles.lockText}>bloqueado</Text>
+                  </View>
+                )}
+                {isFinished && pointsInfo !== null && (
+                  <View style={styles.pointsChip}>
+                    <Ionicons name={pointsInfo.icon as 'trophy'} size={12} color={pointsInfo.color} />
+                    <Text style={[styles.pointsText, { color: pointsInfo.color }]}>
+                      {prediction.points ?? 0} pt{(prediction.points ?? 0) !== 1 ? 's' : ''}{' '}
+                      · {pointsInfo.label}
+                    </Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <Text style={styles.noPredText}>
+                {isFinished ? 'Sem palpite — 0 pts' : 'Sem palpite 🔒'}
+              </Text>
+            )}
+          </View>
+        )}
+      </View>
 
-      {canPredict && !submitted && (
-        <View style={styles.tapHint}>
-          <Ionicons
-            name={expanded ? 'chevron-up' : 'chevron-down'}
-            size={14}
-            color={Colors.textSecondary}
-          />
-          <Text style={styles.tapHintText}>
-            {expanded ? 'Fechar' : 'Tocar para palpitar'}
-          </Text>
-        </View>
-      )}
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -149,165 +228,123 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
     marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.border,
-    ...Shadows.md,
+    overflow: 'hidden',
+    ...Shadows.sm,
   },
-  header: {
+  cardLive: {
+    borderColor: Colors.error,
+    borderWidth: 1.5,
+  },
+
+  meta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  round: {
-    fontSize: FontSizes.xs,
-    color: Colors.textSecondary,
-    fontWeight: FontWeights.medium,
-  },
-  group: {
-    fontSize: FontSizes.xs,
-    color: Colors.accentGold,
-    fontWeight: FontWeights.semibold,
-  },
-  teams: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.sm,
-  },
-  teamBlock: {
-    flex: 1,
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  teamBlockRight: {
-    alignItems: 'center',
-  },
-  flag: {
-    fontSize: 32,
-  },
-  teamName: {
-    fontSize: FontSizes.sm,
-    color: Colors.textPrimary,
-    fontWeight: FontWeights.semibold,
-    textAlign: 'center',
-  },
-  scoreBlock: {
     alignItems: 'center',
     paddingHorizontal: Spacing.sm,
-    minWidth: 80,
+    paddingVertical: 5,
+    backgroundColor: Colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  finalScore: {
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.bold,
-    color: Colors.textPrimary,
-  },
-  scoreSep: {
-    color: Colors.textSecondary,
-  },
-  vsText: {
-    fontSize: FontSizes.lg,
-    fontWeight: FontWeights.bold,
-    color: Colors.textSecondary,
-  },
-  matchTime: {
-    fontSize: FontSizes.xs,
-    color: Colors.textSecondary,
-    marginTop: Spacing.xs,
-    textAlign: 'center',
-  },
-  submittedRow: {
+  metaBadge: { flexDirection: 'row', alignItems: 'center' },
+  metaInfo: { fontSize: 10, color: Colors.textSecondary, flex: 1, textAlign: 'right' },
+
+  liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.error },
+  liveText: { fontSize: 10, fontWeight: FontWeights.bold, color: Colors.error, letterSpacing: 0.8 },
+
+  finishedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  finishedText: { fontSize: 10, color: Colors.textSecondary, letterSpacing: 0.5 },
+
+  openBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  openDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.success },
+  openText: { fontSize: 10, fontWeight: FontWeights.semibold, color: Colors.success, letterSpacing: 0.8 },
+
+  teamsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
-    paddingTop: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm,
   },
-  submittedText: {
-    fontSize: FontSizes.sm,
-    color: Colors.success,
-    fontWeight: FontWeights.medium,
-  },
-  predictionBox: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    marginTop: Spacing.sm,
-    paddingTop: Spacing.md,
-  },
-  predictionTitle: {
-    fontSize: FontSizes.sm,
+  teamSide: { flex: 1, alignItems: 'center', gap: 5 },
+  teamSideRight: {},
+  teamName: {
+    fontSize: FontSizes.xs,
     fontWeight: FontWeights.semibold,
-    color: Colors.textSecondary,
+    color: Colors.textPrimary,
     textAlign: 'center',
-    marginBottom: Spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    lineHeight: 16,
   },
-  predictionRow: {
+  centerCol: { paddingHorizontal: Spacing.xs, alignItems: 'center', minWidth: 86 },
+  score: { fontSize: FontSizes.xl, fontWeight: FontWeights.bold, color: Colors.textPrimary },
+  scoreLive: { color: Colors.error },
+  vsText: { fontSize: FontSizes.xl, fontWeight: FontWeights.bold, color: Colors.border },
+  timeText: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
+
+  predRow: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 7,
+  },
+
+  predOpenRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
+    justifyContent: 'space-between',
   },
-  scoreInputGroup: {
+  predInputGroup: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: Spacing.sm,
   },
-  scoreInputLabel: {
-    fontSize: FontSizes.xs,
-    color: Colors.textSecondary,
-    fontWeight: FontWeights.medium,
-  },
-  scoreInput: {
+  predLabel: { fontSize: 11, color: Colors.textSecondary, fontWeight: FontWeights.medium },
+  input: {
     backgroundColor: Colors.backgroundAlt,
     borderWidth: 2,
-    borderColor: Colors.accentGold,
+    borderColor: Colors.border,
     borderRadius: BorderRadius.md,
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     fontSize: FontSizes.xl,
     fontWeight: FontWeights.bold,
     color: Colors.textPrimary,
     textAlign: 'center',
   },
-  predSep: {
-    fontSize: FontSizes.xl,
+  inputFilled: { borderColor: Colors.accentGold },
+  inputSep: {
+    fontSize: FontSizes.lg,
     color: Colors.textSecondary,
     fontWeight: FontWeights.bold,
-    marginTop: Spacing.lg,
   },
-  submitBtn: {
-    backgroundColor: Colors.accentGold,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.sm,
-    alignItems: 'center',
-  },
-  submitBtnText: {
-    color: Colors.background,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.bold,
-    letterSpacing: 0.5,
-  },
-  tapHint: {
+
+  saveIndicator: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  dotIndicator: { fontSize: FontSizes.md, color: Colors.textSecondary, letterSpacing: 2 },
+  savedRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  savedText: { fontSize: 11, color: Colors.success },
+  errorBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  errorText: { fontSize: 11, color: Colors.error },
+  hintText: { fontSize: 11, color: Colors.border, fontStyle: 'italic' },
+
+  lockedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    marginTop: Spacing.sm,
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
   },
-  tapHintText: {
-    fontSize: FontSizes.xs,
-    color: Colors.textSecondary,
+  predStatic: {
+    fontSize: FontSizes.sm,
+    color: Colors.textPrimary,
+    fontWeight: FontWeights.semibold,
   },
+  lockChip: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  lockText: { fontSize: 11, color: Colors.textSecondary },
+  pointsChip: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  pointsText: { fontSize: 11, fontWeight: FontWeights.semibold },
+  noPredText: { fontSize: FontSizes.sm, color: Colors.textSecondary, fontStyle: 'italic' },
 });
