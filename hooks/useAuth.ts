@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { User, AuthState, LoginCredentials } from '@/types';
 import { login as authLogin, changePassword as authChangePassword } from '@/services/auth';
-import { TOKEN_STORAGE_KEY } from '@/services/api';
+import { TOKEN_STORAGE_KEY, SESSION_STORAGE_KEY } from '@/services/api';
 
-const SESSION_KEY = '@bolao:session';
+const SESSION_KEY = SESSION_STORAGE_KEY;
 
 interface SessionData {
   user: User;
