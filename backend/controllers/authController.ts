@@ -15,14 +15,14 @@ interface UserConfig {
 
 const INITIAL_USERS: UserConfig[] = [
   { nickname: 'Du',      canAccessGerencia: true  },
-  { nickname: 'Manetta', canAccessGerencia: true  },
-  { nickname: 'Sunset',  canAccessGerencia: true  },
-  { nickname: 'Jhow',    canAccessGerencia: true  },
+  { nickname: 'Manetta', canAccessGerencia: false },
+  { nickname: 'Sunset',  canAccessGerencia: false },
+  { nickname: 'Jhow',    canAccessGerencia: false },
   { nickname: 'Nathan',  canAccessGerencia: false },
-  { nickname: 'Lorenzo', canAccessGerencia: true  },
-  { nickname: 'Rubens',  canAccessGerencia: true  },
-  { nickname: 'Peter',   canAccessGerencia: true  },
-  { nickname: 'Vini',    canAccessGerencia: true  },
+  { nickname: 'Lorenzo', canAccessGerencia: false },
+  { nickname: 'Rubens',  canAccessGerencia: false },
+  { nickname: 'Peter',   canAccessGerencia: false },
+  { nickname: 'Vini',    canAccessGerencia: false },
 ];
 const DEFAULT_PASSWORD = '123';
 
