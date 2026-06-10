@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthenticatedRequest } from '../middleware/auth';
+import { SCORING } from '../config/scoring';
 
 const prisma = new PrismaClient();
 
@@ -20,7 +21,7 @@ function buildEntry(user: {
 }): RankingEntry {
   const totalPredictions = user.predictions.length;
   const points = user.predictions.reduce((sum, p) => sum + (p.points ?? 0), 0);
-  const exactMatches = user.predictions.filter((p) => p.points === 3).length;
+  const exactMatches = user.predictions.filter((p) => p.points === SCORING.exactScore).length;
   const winRate =
     totalPredictions > 0
       ? Math.round(

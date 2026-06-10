@@ -54,10 +54,41 @@ async function runMigrations(): Promise<void> {
   }
 }
 
+/**
+ * Recalcula os pontos de todos os palpites de partidas FINISHED.
+ * Garante que o ranking global sempre reflita a regra atual de SCORING,
+ * mesmo que ela mude entre deploys.
+ */
+async function recalculateFinishedPoints(): Promise<void> {
+  const { PrismaClient } = await import('@prisma/client');
+  const { computePoints } = await import('../config/scoring');
+  const p = new PrismaClient();
+  try {
+    const finished = await p.match.findMany({
+      where: { status: 'FINISHED', homeScore: { not: null }, awayScore: { not: null } },
+      include: { predictions: true },
+    });
+    let updated = 0;
+    for (const m of finished) {
+      for (const pred of m.predictions) {
+        const points = computePoints(pred.homeScore, pred.awayScore, m.homeScore!, m.awayScore!);
+        if (pred.points !== points) {
+          await p.prediction.update({ where: { id: pred.id }, data: { points } });
+          updated++;
+        }
+      }
+    }
+    console.log(`[recalc] ${finished.length} partidas encerradas verificadas, ${updated} palpites atualizados.`);
+  } finally {
+    await p.$disconnect();
+  }
+}
+
 async function start(): Promise<void> {
   await runMigrations();
   await seedUsers();
   await seedWorldCup();
+  await recalculateFinishedPoints();
   app.listen(PORT, () => {
     console.log(`Bolão Covil API running on port ${PORT}`);
   });

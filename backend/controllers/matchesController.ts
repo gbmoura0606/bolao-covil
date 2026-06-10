@@ -54,7 +54,34 @@ export async function updateMatchScore(req: AuthenticatedRequest, res: Response)
     homeScore?: number; awayScore?: number; status?: MatchStatus;
   };
 
+  const validScore = (v: number | undefined): boolean =>
+    v === undefined || (Number.isInteger(v) && v >= 0 && v <= 99);
+  if (!validScore(homeScore) || !validScore(awayScore)) {
+    res.status(400).json({ error: 'Placar deve ser um inteiro entre 0 e 99.' });
+    return;
+  }
+
   try {
+    const existing = await prisma.match.findUnique({ where: { id } });
+    if (!existing) {
+      res.status(404).json({ error: 'Partida não encontrada.' });
+      return;
+    }
+    // Jogo encerrado é imutável — correções só via banco de dados.
+    if (existing.status === 'FINISHED') {
+      res.status(409).json({ error: 'Partida encerrada não pode mais ser alterada.' });
+      return;
+    }
+    // Encerrar exige placar completo, senão os pontos nunca seriam calculados.
+    if (status === 'FINISHED') {
+      const finalHome = homeScore ?? existing.homeScore;
+      const finalAway = awayScore ?? existing.awayScore;
+      if (finalHome === null || finalHome === undefined || finalAway === null || finalAway === undefined) {
+        res.status(400).json({ error: 'Informe o placar antes de encerrar a partida.' });
+        return;
+      }
+    }
+
     const match = await prisma.match.update({
       where: { id },
       data: {
@@ -79,6 +106,11 @@ export async function updateMatchScore(req: AuthenticatedRequest, res: Response)
         ),
       );
     }
+
+    console.log(
+      `[gerencia] ${req.userNickname ?? req.userId} atualizou partida ${existing.externalId ?? id}: ` +
+      `${match.homeScore ?? '-'}x${match.awayScore ?? '-'} (${match.status})`,
+    );
 
     res.json(match);
   } catch {

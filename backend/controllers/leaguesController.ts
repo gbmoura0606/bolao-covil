@@ -1,8 +1,23 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthenticatedRequest } from '../middleware/auth';
+import { brtWallClockNow } from '../config/time';
 
 const prisma = new PrismaClient();
+
+/** A Copa começou se alguma partida já saiu de OPEN ou se o primeiro jogo já tem horário passado. */
+async function tournamentStarted(): Promise<boolean> {
+  const started = await prisma.match.findFirst({
+    where: {
+      OR: [
+        { status: { not: 'OPEN' } },
+        { matchDate: { lte: brtWallClockNow() } },
+      ],
+    },
+    select: { id: true },
+  });
+  return started !== null;
+}
 
 export async function listUserLeagues(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
@@ -117,6 +132,10 @@ export async function updateLeagueScoring(req: AuthenticatedRequest, res: Respon
     }
     if (league.ownerId !== req.userId) {
       res.status(403).json({ error: 'Apenas o dono da liga pode alterar a pontuação.' });
+      return;
+    }
+    if (await tournamentStarted()) {
+      res.status(409).json({ error: 'A Copa já começou — os critérios de pontuação não podem mais ser alterados.' });
       return;
     }
 

@@ -84,9 +84,3 @@ export async function createLeague(name: string): Promise<{ id: string; name: st
   return response.data;
 }
 
-export async function updateLeagueScoring(
-  leagueId: string,
-  scoring: { scoreResult?: number; scoreGoalDiff?: number; scoreExact?: number },
-): Promise<void> {
-  await api.patch(`/api/leagues/${leagueId}/scoring`, scoring);
-}

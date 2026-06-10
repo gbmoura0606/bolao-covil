@@ -1,8 +1,18 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthenticatedRequest } from '../middleware/auth';
+import { hasKickedOff } from '../config/time';
 
 const prisma = new PrismaClient();
+
+/**
+ * Palpites fecham quando o status sai de OPEN **ou** quando o horário do
+ * jogo chega — o que vier primeiro. O horário protege contra o caso de a
+ * gerência esquecer de fechar a partida manualmente.
+ */
+function predictionsClosed(match: { status: string; matchDate: Date }): boolean {
+  return match.status !== 'OPEN' || hasKickedOff(match.matchDate);
+}
 
 export async function getUserPredictions(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
@@ -34,7 +44,7 @@ export async function createPrediction(req: AuthenticatedRequest, res: Response)
   try {
     const match = await prisma.match.findUnique({ where: { id: matchId } });
     if (!match) { res.status(404).json({ error: 'Partida não encontrada.' }); return; }
-    if (match.status !== 'OPEN') {
+    if (predictionsClosed(match)) {
       res.status(400).json({ error: 'Esta partida não aceita mais palpites.' }); return;
     }
 
@@ -62,7 +72,7 @@ export async function updatePrediction(req: AuthenticatedRequest, res: Response)
     }
 
     const match = await prisma.match.findUnique({ where: { id: existing.matchId } });
-    if (match?.status !== 'OPEN') {
+    if (!match || predictionsClosed(match)) {
       res.status(400).json({ error: 'Esta partida não aceita mais alterações.' }); return;
     }
 
@@ -94,7 +104,7 @@ export async function upsertPrediction(req: AuthenticatedRequest, res: Response)
   try {
     const match = await prisma.match.findUnique({ where: { id: matchId } });
     if (!match) { res.status(404).json({ error: 'Partida não encontrada.' }); return; }
-    if (match.status !== 'OPEN') {
+    if (predictionsClosed(match)) {
       res.status(400).json({ error: 'Esta partida não aceita mais palpites.' }); return;
     }
 

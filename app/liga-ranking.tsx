@@ -7,13 +7,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { Colors, FontSizes, FontWeights, Spacing, BorderRadius } from '@/constants/theme';
-import { getLeagueById, updateLeagueScoring } from '@/services/leagues';
+import { getLeagueById } from '@/services/leagues';
 import { getLeagueRanking } from '@/services/ranking';
 import type { League, Player } from '@/types';
 
@@ -102,7 +101,7 @@ const rowS = StyleSheet.create({
   ptLabel: { fontSize: 9, color: Colors.textSecondary },
 });
 
-// ─── Scoring Config Panel ─────────────────────────────────────────────────────
+// ─── Scoring Rules Panel (somente consulta) ───────────────────────────────────
 
 interface ScoringConfig {
   scoreResult: number;
@@ -110,55 +109,21 @@ interface ScoringConfig {
   scoreExact: number;
 }
 
-function ScoringPanel({
-  leagueId,
-  initial,
-  onSaved,
-}: {
-  leagueId: string;
-  initial: ScoringConfig;
-  onSaved: (next: ScoringConfig) => void;
-}): React.JSX.Element {
+function ScoringRulesPanel({ config }: { config: ScoringConfig }): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<ScoringConfig>(initial);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState('');
 
   const ROWS: { key: keyof ScoringConfig; label: string; hint: string }[] = [
-    { key: 'scoreResult',   label: 'Vencedor / Empate', hint: 'acertou quem venceu ou que empatou' },
-    { key: 'scoreGoalDiff', label: 'Saldo de Gols',     hint: 'acertou a diferença de gols' },
     { key: 'scoreExact',    label: 'Placar Exato',       hint: 'acertou o placar exato' },
+    { key: 'scoreGoalDiff', label: 'Saldo de Gols',     hint: 'acertou a diferença de gols' },
+    { key: 'scoreResult',   label: 'Vencedor / Empate', hint: 'acertou quem venceu ou que empatou' },
   ];
-
-  function setVal(key: keyof ScoringConfig, raw: string): void {
-    const n = parseInt(raw, 10);
-    setDraft((prev) => ({ ...prev, [key]: isNaN(n) ? 0 : Math.min(99, Math.max(0, n)) }));
-  }
-
-  async function save(): Promise<void> {
-    if (draft.scoreResult > draft.scoreGoalDiff || draft.scoreGoalDiff > draft.scoreExact) {
-      setError('Os pontos devem ser: Vencedor ≤ Saldo ≤ Exato.');
-      return;
-    }
-    setError('');
-    setIsSaving(true);
-    try {
-      await updateLeagueScoring(leagueId, draft);
-      onSaved(draft);
-      setOpen(false);
-    } catch {
-      setError('Falha ao salvar. Tente novamente.');
-    } finally {
-      setIsSaving(false);
-    }
-  }
 
   return (
     <View style={spS.container}>
       <TouchableOpacity style={spS.header} onPress={() => setOpen((o) => !o)} activeOpacity={0.8}>
         <View style={spS.headerLeft}>
-          <Ionicons name="settings-outline" size={14} color={Colors.accentGold} />
-          <Text style={spS.headerTitle}>Configuração de Pontuação</Text>
+          <Ionicons name="information-circle-outline" size={14} color={Colors.accentGold} />
+          <Text style={spS.headerTitle}>Regras de Pontuação</Text>
         </View>
         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={Colors.textSecondary} />
       </TouchableOpacity>
@@ -171,33 +136,13 @@ function ScoringPanel({
                 <Text style={spS.rowLabel}>{label}</Text>
                 <Text style={spS.rowHint}>{hint}</Text>
               </View>
-              <View style={spS.inputWrap}>
-                <TextInput
-                  style={spS.input}
-                  value={String(draft[key])}
-                  onChangeText={(v) => setVal(key, v)}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  selectTextOnFocus
-                />
-                <Text style={spS.pts}>pts</Text>
-              </View>
+              <Text style={spS.value}>{config[key]} pts</Text>
             </View>
           ))}
-
-          {error !== '' && <Text style={spS.error}>{error}</Text>}
-
-          <TouchableOpacity
-            style={[spS.saveBtn, isSaving && spS.saveBtnDisabled]}
-            onPress={() => void save()}
-            activeOpacity={0.8}
-            disabled={isSaving}
-          >
-            {isSaving
-              ? <ActivityIndicator size="small" color={Colors.background} />
-              : <Text style={spS.saveBtnText}>Salvar</Text>
-            }
-          </TouchableOpacity>
+          <Text style={spS.lockedNote}>
+            Vale o critério mais alto que o palpite atingir. Os critérios foram
+            definidos antes do início da Copa e não podem mais ser alterados.
+          </Text>
         </View>
       )}
     </View>
@@ -229,21 +174,8 @@ const spS = StyleSheet.create({
   rowText: { flex: 1 },
   rowLabel: { fontSize: FontSizes.sm, fontWeight: FontWeights.medium, color: Colors.textPrimary },
   rowHint: { fontSize: 10, color: Colors.textSecondary, marginTop: 1 },
-  inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  input: {
-    width: 44, height: 36, borderWidth: 1.5, borderColor: Colors.border,
-    borderRadius: BorderRadius.sm, backgroundColor: Colors.backgroundAlt,
-    color: Colors.textPrimary, fontSize: FontSizes.md, fontWeight: FontWeights.bold,
-    textAlign: 'center',
-  },
-  pts: { fontSize: 11, color: Colors.textSecondary },
-  error: { fontSize: 11, color: Colors.error, marginTop: 2 },
-  saveBtn: {
-    backgroundColor: Colors.accentGold, borderRadius: BorderRadius.sm,
-    paddingVertical: Spacing.sm, alignItems: 'center', marginTop: Spacing.xs,
-  },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { color: Colors.background, fontWeight: FontWeights.bold, fontSize: FontSizes.sm },
+  value: { fontSize: FontSizes.md, fontWeight: FontWeights.bold, color: Colors.accentGold },
+  lockedNote: { fontSize: 10, color: Colors.textSecondary, lineHeight: 15, marginTop: Spacing.xs },
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -287,7 +219,6 @@ export default function LigaRankingScreen(): React.JSX.Element {
     void load(true);
   }
 
-  const isOwner = user !== null && league !== null && user.id === league.ownerId;
   const leader = ranking[0];
   const myIdx = ranking.findIndex((p) => p.id === user?.id);
   const myEntry = myIdx !== -1 ? ranking[myIdx] : null;
@@ -385,12 +316,10 @@ export default function LigaRankingScreen(): React.JSX.Element {
             </View>
           )}
 
-          {/* Scoring config — only for owner */}
-          {isOwner && league !== null && (
-            <ScoringPanel
-              leagueId={league.id}
-              initial={{ scoreResult: league.scoreResult, scoreGoalDiff: league.scoreGoalDiff, scoreExact: league.scoreExact }}
-              onSaved={(next) => setLeague((prev) => prev !== null ? { ...prev, ...next } : prev)}
+          {/* Regras de pontuação — somente consulta, visível a todos */}
+          {league !== null && (
+            <ScoringRulesPanel
+              config={{ scoreResult: league.scoreResult, scoreGoalDiff: league.scoreGoalDiff, scoreExact: league.scoreExact }}
             />
           )}
 

@@ -39,17 +39,30 @@ function getPointsInfo(
   if (predHome === realHome && predAway === realAway) {
     return { label: 'placar exato', color: Colors.accentGold, icon: 'trophy' };
   }
+  if (predHome - predAway === realHome - realAway) {
+    return { label: 'saldo de gols', color: '#60A5FA', icon: 'trending-up' };
+  }
   if (Math.sign(predHome - predAway) === Math.sign(realHome - realAway)) {
     return { label: 'resultado certo', color: Colors.success, icon: 'football-outline' };
   }
   return { label: 'resultado errado', color: Colors.textSecondary, icon: 'close-circle-outline' };
 }
 
+/**
+ * matchDate/matchTime estão no horário de Brasília; em dispositivos no fuso
+ * BRT a comparação local é exata. O backend rejeita palpites após o início
+ * independentemente desta checagem visual.
+ */
+function hasMatchStarted(match: Match): boolean {
+  return new Date().getTime() >= new Date(`${match.matchDate}T${match.matchTime}:00`).getTime();
+}
+
 export function MatchCard({ match, prediction, onUpdateScore, onRetry }: MatchCardProps): React.JSX.Element {
   const awayInputRef = useRef<TextInput>(null);
 
-  const isOpen = match.status === 'OPEN';
-  const isLive = match.status === 'CLOSED';
+  const started = hasMatchStarted(match);
+  const isOpen = match.status === 'OPEN' && !started;
+  const isLive = match.status === 'CLOSED' || (match.status === 'OPEN' && started);
   const isFinished = match.status === 'FINISHED';
 
   const homeScore = prediction?.homeScore ?? '';

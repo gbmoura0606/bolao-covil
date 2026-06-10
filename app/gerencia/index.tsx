@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  Alert,
   FlatList,
   TextInput,
-  Modal,
   ActivityIndicator,
   ListRenderItemInfo,
 } from 'react-native';
@@ -32,144 +30,221 @@ interface DbMatch {
   venue: string | null;
 }
 
-function ScoreUpdateModal({
-  match,
-  onClose,
-  onSaved,
-}: {
-  match: DbMatch;
-  onClose: () => void;
-  onSaved: () => void;
-}): React.JSX.Element {
-  const [homeScore, setHomeScore] = useState(match.homeScore?.toString() ?? '');
-  const [awayScore, setAwayScore] = useState(match.awayScore?.toString() ?? '');
-  const [status, setStatus] = useState<'OPEN' | 'CLOSED' | 'FINISHED'>(
-    match.status as 'OPEN' | 'CLOSED' | 'FINISHED',
-  );
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState('');
+/** Botão "Encerrar jogo" aparece 1h45 após o início da partida. */
+const FINISH_DELAY_MS = 105 * 60_000;
+const CONFIRM_TIMEOUT_MS = 4000;
 
-  async function handleSave(): Promise<void> {
-    setError('');
-    setIsSaving(true);
-    try {
-      const body: Record<string, unknown> = { status };
-      if (homeScore !== '') body.homeScore = parseInt(homeScore, 10);
-      if (awayScore !== '') body.awayScore = parseInt(awayScore, 10);
-      await api.patch(`/api/matches/${match.id}/score`, body);
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao salvar.');
-    } finally {
-      setIsSaving(false);
-    }
-  }
+/**
+ * Horários gravados como Brasília com sufixo Z — remove o Z e interpreta
+ * no fuso local do dispositivo (a gerência opera em BRT).
+ */
+function kickoffLocal(iso: string): Date {
+  return new Date(iso.replace(/(\.\d{3})?Z$/, ''));
+}
 
+const BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  OPEN:     { label: 'PRÉ-JOGO',     color: Colors.success,    bg: 'rgba(34,197,94,0.12)' },
+  CLOSED:   { label: 'EM ANDAMENTO', color: Colors.accentGold, bg: 'rgba(245,158,11,0.12)' },
+  FINISHED: { label: 'ENCERRADO',    color: Colors.error,      bg: 'rgba(239,68,68,0.12)' },
+};
+
+function StatusBadge({ status }: { status: string }): React.JSX.Element {
+  const b = BADGE[status] ?? BADGE.OPEN;
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={ms.overlay}>
-        <View style={ms.box}>
-          <View style={ms.header}>
-            <Text style={ms.title}>Atualizar Placar</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={22} color={Colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={ms.matchInfo}>
-            <Text style={ms.teamName}>{match.homeTeam?.flagEmoji ?? ''} {match.homeTeam?.name ?? '?'}</Text>
-            <Text style={ms.vs}>×</Text>
-            <Text style={ms.teamName}>{match.awayTeam?.flagEmoji ?? ''} {match.awayTeam?.name ?? '?'}</Text>
-          </View>
-
-          <View style={ms.scoreRow}>
-            <TextInput
-              style={ms.scoreInput}
-              value={homeScore}
-              onChangeText={(v) => setHomeScore(v.replace(/[^0-9]/g, ''))}
-              keyboardType="number-pad"
-              maxLength={2}
-              placeholder="–"
-              placeholderTextColor={Colors.textSecondary}
-            />
-            <Text style={ms.scoreSep}>–</Text>
-            <TextInput
-              style={ms.scoreInput}
-              value={awayScore}
-              onChangeText={(v) => setAwayScore(v.replace(/[^0-9]/g, ''))}
-              keyboardType="number-pad"
-              maxLength={2}
-              placeholder="–"
-              placeholderTextColor={Colors.textSecondary}
-            />
-          </View>
-
-          <Text style={ms.statusLabel}>Status</Text>
-          <View style={ms.statusRow}>
-            {(['OPEN', 'CLOSED', 'FINISHED'] as const).map((s) => (
-              <TouchableOpacity
-                key={s}
-                style={[ms.statusBtn, status === s && ms.statusBtnActive]}
-                onPress={() => setStatus(s)}
-                activeOpacity={0.8}
-              >
-                <Text style={[ms.statusTxt, status === s && ms.statusTxtActive]}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {error !== '' && <Text style={ms.error}>{error}</Text>}
-
-          <TouchableOpacity
-            style={[ms.saveBtn, isSaving && ms.saveBtnDisabled]}
-            onPress={handleSave}
-            disabled={isSaving}
-            activeOpacity={0.8}
-          >
-            {isSaving
-              ? <ActivityIndicator size="small" color={Colors.background} />
-              : <Text style={ms.saveTxt}>Salvar</Text>}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+    <View style={[styles.badge, { backgroundColor: b.bg, borderColor: b.color }]}>
+      <View style={[styles.badgeDot, { backgroundColor: b.color }]} />
+      <Text style={[styles.badgeTxt, { color: b.color }]}>{b.label}</Text>
+    </View>
   );
 }
 
-const ms = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: Spacing.lg },
-  box: { backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.lg, width: '100%', borderWidth: 1, borderColor: Colors.border, ...Shadows.lg },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
-  title: { fontSize: FontSizes.md, fontWeight: FontWeights.bold, color: Colors.textPrimary },
-  matchInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md, paddingHorizontal: Spacing.sm },
-  teamName: { flex: 1, fontSize: 12, color: Colors.textPrimary, fontWeight: FontWeights.medium, textAlign: 'center' },
-  vs: { fontSize: FontSizes.md, color: Colors.textSecondary, paddingHorizontal: Spacing.sm },
-  scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.md, marginBottom: Spacing.lg },
-  scoreInput: { width: 64, height: 52, backgroundColor: Colors.backgroundAlt, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, fontSize: 24, fontWeight: FontWeights.bold, color: Colors.textPrimary, textAlign: 'center' },
-  scoreSep: { fontSize: 22, color: Colors.textSecondary, fontWeight: FontWeights.bold },
-  statusLabel: { fontSize: FontSizes.xs, fontWeight: FontWeights.semibold, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Spacing.xs },
-  statusRow: { flexDirection: 'row', gap: Spacing.xs, marginBottom: Spacing.lg },
-  statusBtn: { flex: 1, paddingVertical: 8, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, alignItems: 'center' },
-  statusBtnActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
-  statusTxt: { fontSize: 11, fontWeight: FontWeights.semibold, color: Colors.textSecondary },
-  statusTxtActive: { color: Colors.textPrimary },
-  error: { fontSize: FontSizes.xs, color: Colors.error, marginBottom: Spacing.sm },
-  saveBtn: { backgroundColor: '#3B82F6', borderRadius: BorderRadius.md, paddingVertical: Spacing.md, alignItems: 'center' },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveTxt: { color: Colors.textPrimary, fontWeight: FontWeights.bold, fontSize: FontSizes.md },
-});
+function MatchAdminCard({
+  match,
+  onSaved,
+}: {
+  match: DbMatch;
+  onSaved: () => void;
+}): React.JSX.Element {
+  const [home, setHome] = useState(match.homeScore?.toString() ?? '');
+  const [away, setAway] = useState(match.awayScore?.toString() ?? '');
+  const [confirming, setConfirming] = useState<'save' | 'finish' | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Ressincroniza inputs quando o placar muda no servidor (refresh da lista)
+  useEffect(() => {
+    setHome(match.homeScore?.toString() ?? '');
+    setAway(match.awayScore?.toString() ?? '');
+  }, [match.homeScore, match.awayScore]);
+
+  useEffect(() => () => {
+    if (confirmTimer.current) clearTimeout(confirmTimer.current);
+  }, []);
+
+  const isFinished = match.status === 'FINISHED';
+  const kickoff = kickoffLocal(match.matchDate);
+  const started = Date.now() >= kickoff.getTime();
+  const canFinish = !isFinished && Date.now() >= kickoff.getTime() + FINISH_DELAY_MS;
+
+  const persistedHome = match.homeScore?.toString() ?? '';
+  const persistedAway = match.awayScore?.toString() ?? '';
+  const dirty = home !== persistedHome || away !== persistedAway;
+  const complete = home !== '' && away !== '';
+
+  function armConfirm(action: 'save' | 'finish'): boolean {
+    if (confirming === action) {
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      setConfirming(null);
+      return true;
+    }
+    setConfirming(action);
+    if (confirmTimer.current) clearTimeout(confirmTimer.current);
+    confirmTimer.current = setTimeout(() => setConfirming(null), CONFIRM_TIMEOUT_MS);
+    return false;
+  }
+
+  async function patch(body: Record<string, unknown>): Promise<void> {
+    setError('');
+    setSaving(true);
+    try {
+      await api.patch(`/api/matches/${match.id}/score`, body);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao salvar.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleSave(): void {
+    if (!armConfirm('save')) return;
+    const body: Record<string, unknown> = {
+      homeScore: parseInt(home, 10),
+      awayScore: parseInt(away, 10),
+    };
+    // Registrar placar com o jogo já iniciado move para "Em Andamento"
+    if (match.status === 'OPEN' && started) body.status = 'CLOSED';
+    void patch(body);
+  }
+
+  function handleFinish(): void {
+    if (!armConfirm('finish')) return;
+    void patch({
+      homeScore: parseInt(home, 10),
+      awayScore: parseInt(away, 10),
+      status: 'FINISHED',
+    });
+  }
+
+  const dateLabel = `${match.matchDate.substring(8, 10)}/${match.matchDate.substring(5, 7)} · ${match.matchDate.substring(11, 16)}`;
+
+  return (
+    <View style={styles.matchCard}>
+      <View style={styles.cardMeta}>
+        <StatusBadge status={match.status} />
+        <Text style={styles.matchMeta}>
+          {dateLabel} · {match.group ? `Grupo ${match.group}` : match.round.toUpperCase()}
+        </Text>
+      </View>
+
+      <View style={styles.teamsRow}>
+        <View style={styles.teamSide}>
+          <Text style={styles.teamFlag}>{match.homeTeam?.flagEmoji ?? ''}</Text>
+          <Text style={styles.teamName} numberOfLines={2}>{match.homeTeam?.name ?? '?'}</Text>
+        </View>
+
+        <View style={styles.centerCol}>
+          {isFinished ? (
+            <Text style={styles.scoreFinal}>{match.homeScore} – {match.awayScore}</Text>
+          ) : (
+            <View style={styles.inputsRow}>
+              <TextInput
+                style={[styles.input, home !== '' && styles.inputFilled]}
+                value={home}
+                onChangeText={(v) => setHome(v.replace(/[^0-9]/g, '').slice(0, 2))}
+                keyboardType="number-pad"
+                maxLength={2}
+                placeholder="?"
+                placeholderTextColor={Colors.border}
+                selectTextOnFocus
+              />
+              <Text style={styles.inputSep}>×</Text>
+              <TextInput
+                style={[styles.input, away !== '' && styles.inputFilled]}
+                value={away}
+                onChangeText={(v) => setAway(v.replace(/[^0-9]/g, '').slice(0, 2))}
+                keyboardType="number-pad"
+                maxLength={2}
+                placeholder="?"
+                placeholderTextColor={Colors.border}
+                selectTextOnFocus
+              />
+            </View>
+          )}
+        </View>
+
+        <View style={styles.teamSide}>
+          <Text style={styles.teamFlag}>{match.awayTeam?.flagEmoji ?? ''}</Text>
+          <Text style={styles.teamName} numberOfLines={2}>{match.awayTeam?.name ?? '?'}</Text>
+        </View>
+      </View>
+
+      {!isFinished && (
+        <View style={styles.actionsRow}>
+          {dirty && complete && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.saveBtn, confirming === 'save' && styles.btnConfirming]}
+              onPress={handleSave}
+              disabled={saving}
+              activeOpacity={0.8}
+            >
+              {saving && confirming !== 'finish' ? (
+                <ActivityIndicator size="small" color={Colors.textPrimary} />
+              ) : (
+                <Text style={styles.actionTxt}>
+                  {confirming === 'save' ? 'Confirmar placar?' : 'Salvar placar'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
+          {canFinish && complete && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.finishBtn, confirming === 'finish' && styles.btnConfirming]}
+              onPress={handleFinish}
+              disabled={saving}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="lock-closed" size={13} color={Colors.textPrimary} />
+              <Text style={styles.actionTxt}>
+                {confirming === 'finish' ? 'Confirmar encerramento?' : 'Encerrar jogo'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {isFinished && (
+        <View style={styles.lockedRow}>
+          <Ionicons name="lock-closed" size={11} color={Colors.textSecondary} />
+          <Text style={styles.lockedTxt}>Jogo encerrado — resultado travado</Text>
+        </View>
+      )}
+
+      {error !== '' && <Text style={styles.errorTxt}>{error}</Text>}
+    </View>
+  );
+}
 
 export default function GerenciaHomeScreen(): React.JSX.Element {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [matches, setMatches] = useState<DbMatch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [editingMatch, setEditingMatch] = useState<DbMatch | null>(null);
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'finished'>('upcoming');
 
-  const loadMatches = useCallback(async (): Promise<void> => {
-    setIsLoading(true);
+  const loadMatches = useCallback(async (silent = false): Promise<void> => {
+    if (!silent) setIsLoading(true);
     try {
       const res = await api.get<DbMatch[]>('/api/matches');
       setMatches(res.data.filter((m) => m.homeTeam && m.awayTeam));
@@ -184,18 +259,10 @@ export default function GerenciaHomeScreen(): React.JSX.Element {
     void loadMatches();
   }, [loadMatches]);
 
+  // Sem Alert.alert: diálogos multi-botão não funcionam no react-native-web
   async function handleLogout(): Promise<void> {
-    Alert.alert('Sair', 'Tem certeza que deseja sair?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Sair',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace('/landing');
-        },
-      },
-    ]);
+    await logout();
+    router.replace('/landing');
   }
 
   const filtered = matches.filter((m) => {
@@ -205,25 +272,7 @@ export default function GerenciaHomeScreen(): React.JSX.Element {
   });
 
   function renderMatch({ item }: ListRenderItemInfo<DbMatch>): React.JSX.Element {
-    const hasScore = item.homeScore !== null && item.awayScore !== null;
-    return (
-      <TouchableOpacity style={styles.matchCard} onPress={() => setEditingMatch(item)} activeOpacity={0.8}>
-        <View style={styles.matchLeft}>
-          <View style={styles.matchTeams}>
-            <Text style={styles.matchTeam} numberOfLines={1}>{item.homeTeam?.flagEmoji} {item.homeTeam?.name}</Text>
-            <Text style={styles.matchSep}>×</Text>
-            <Text style={styles.matchTeam} numberOfLines={1}>{item.awayTeam?.flagEmoji} {item.awayTeam?.name}</Text>
-          </View>
-          <Text style={styles.matchMeta}>{item.matchDate.substring(0, 10)} · {item.group ? `Grupo ${item.group}` : item.round.toUpperCase()}</Text>
-        </View>
-        <View style={styles.matchRight}>
-          {hasScore
-            ? <Text style={styles.matchScore}>{item.homeScore}–{item.awayScore}</Text>
-            : <Text style={styles.matchNoScore}>–</Text>}
-          <View style={[styles.statusDot, item.status === 'FINISHED' && styles.dotFinished, item.status === 'CLOSED' && styles.dotClosed]} />
-        </View>
-      </TouchableOpacity>
-    );
+    return <MatchAdminCard match={item} onSaved={() => void loadMatches(true)} />;
   }
 
   return (
@@ -246,7 +295,7 @@ export default function GerenciaHomeScreen(): React.JSX.Element {
           >
             <Ionicons name="people-outline" size={22} color="#60A5FA" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={() => void handleLogout()} activeOpacity={0.7}>
             <Ionicons name="log-out-outline" size={22} color={Colors.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -283,14 +332,6 @@ export default function GerenciaHomeScreen(): React.JSX.Element {
               <Text style={styles.emptyTxt}>Nenhuma partida encontrada.</Text>
             </View>
           }
-        />
-      )}
-
-      {editingMatch && (
-        <ScoreUpdateModal
-          match={editingMatch}
-          onClose={() => setEditingMatch(null)}
-          onSaved={() => void loadMatches()}
         />
       )}
     </SafeAreaView>
@@ -339,10 +380,8 @@ const styles = StyleSheet.create({
   list: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xxl },
   emptyTxt: { color: Colors.textSecondary, fontSize: FontSizes.sm },
+
   matchCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
@@ -351,15 +390,79 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
     ...Shadows.sm,
   },
-  matchLeft: { flex: 1 },
-  matchTeams: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: 3 },
-  matchTeam: { flex: 1, fontSize: 13, color: Colors.textPrimary, fontWeight: FontWeights.medium },
-  matchSep: { fontSize: 11, color: Colors.textSecondary },
-  matchMeta: { fontSize: 11, color: Colors.textSecondary },
-  matchRight: { alignItems: 'flex-end', gap: 4 },
-  matchScore: { fontSize: FontSizes.md, fontWeight: FontWeights.bold, color: '#60A5FA' },
-  matchNoScore: { fontSize: FontSizes.md, color: Colors.textSecondary },
-  statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.accentGold },
-  dotFinished: { backgroundColor: Colors.success },
-  dotClosed: { backgroundColor: Colors.error },
+  cardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  badgeDot: { width: 6, height: 6, borderRadius: 3 },
+  badgeTxt: { fontSize: 10, fontWeight: FontWeights.bold, letterSpacing: 0.6 },
+  matchMeta: { fontSize: 11, color: Colors.textSecondary, flexShrink: 1, textAlign: 'right' },
+
+  teamsRow: { flexDirection: 'row', alignItems: 'center' },
+  teamSide: { flex: 1, alignItems: 'center', gap: 3 },
+  teamFlag: { fontSize: 24 },
+  teamName: {
+    fontSize: FontSizes.xs, fontWeight: FontWeights.semibold,
+    color: Colors.textPrimary, textAlign: 'center', lineHeight: 15,
+  },
+  centerCol: { alignItems: 'center', minWidth: 120, paddingHorizontal: Spacing.xs },
+  inputsRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  input: {
+    backgroundColor: Colors.backgroundAlt,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.sm,
+    width: 44,
+    height: 44,
+    fontSize: FontSizes.lg,
+    fontWeight: FontWeights.bold,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  inputFilled: { borderColor: '#3B82F6' },
+  inputSep: { fontSize: FontSizes.md, color: Colors.textSecondary, fontWeight: FontWeights.bold },
+  scoreFinal: { fontSize: FontSizes.xl, fontWeight: FontWeights.bold, color: Colors.error },
+
+  actionsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+    flexWrap: 'wrap',
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    flex: 1,
+    minWidth: 130,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+  },
+  saveBtn: { backgroundColor: '#3B82F6' },
+  finishBtn: { backgroundColor: Colors.error },
+  btnConfirming: { opacity: 0.85, borderWidth: 1.5, borderColor: Colors.textPrimary },
+  actionTxt: { fontSize: FontSizes.xs, fontWeight: FontWeights.bold, color: Colors.textPrimary },
+
+  lockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: Spacing.sm,
+  },
+  lockedTxt: { fontSize: 11, color: Colors.textSecondary },
+  errorTxt: { fontSize: 11, color: Colors.error, marginTop: Spacing.xs, textAlign: 'center' },
 });
