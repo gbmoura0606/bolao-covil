@@ -28,7 +28,7 @@ function getInitials(nickname: string): string {
 }
 
 export default function ConfiguracoesScreen(): React.JSX.Element {
-  const { user, logout } = useAuth();
+  const { user, logout, canAccessGerencia } = useAuth();
   const router = useRouter();
 
   async function handleLogout(): Promise<void> {
@@ -56,6 +56,14 @@ export default function ConfiguracoesScreen(): React.JSX.Element {
       icon: 'lock-closed-outline',
       onPress: () => router.push('/change-password'),
     },
+    ...(canAccessGerencia
+      ? [{
+          id: 'users',
+          label: 'Usuários do Bolão',
+          icon: 'people-outline' as IoniconName,
+          onPress: () => router.push('/gerencia/usuarios'),
+        }]
+      : []),
     {
       id: 'notifications',
       label: 'Notificações',

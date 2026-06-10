@@ -135,6 +135,30 @@ export async function listUsersStatus(_req: AuthenticatedRequest, res: Response)
   }
 }
 
+/**
+ * Reset administrativo: volta a senha do usuário para a padrão ('123')
+ * e força a troca no próximo login.
+ */
+export async function resetUserPassword(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { id } = req.params;
+  try {
+    const target = await prisma.user.findUnique({ where: { id } });
+    if (!target) {
+      res.status(404).json({ error: 'Usuário não encontrado.' });
+      return;
+    }
+    const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+    await prisma.user.update({
+      where: { id },
+      data: { passwordHash, mustChangePassword: true },
+    });
+    console.log(`[admin] senha de "${target.nickname}" resetada por ${req.userNickname}`);
+    res.json({ success: true, nickname: target.nickname });
+  } catch {
+    res.status(500).json({ error: 'Erro ao resetar senha.' });
+  }
+}
+
 export async function getMe(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.userId } });

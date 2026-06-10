@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getUsersStatus, UserStatus } from '@/services/users';
+import { Toast } from '@/components/Toast';
+import { getUsersStatus, resetUserPassword, UserStatus } from '@/services/users';
 import { Colors, FontSizes, FontWeights, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 
 function fmtLastLogin(iso: string | null): string {
@@ -31,7 +32,14 @@ function fmtLastLogin(iso: string | null): string {
   return d.toLocaleDateString('pt-BR');
 }
 
-function UserRow({ user }: { user: UserStatus }): React.JSX.Element {
+function UserRow({
+  user, confirming, resetting, onResetPress,
+}: {
+  user: UserStatus;
+  confirming: boolean;
+  resetting: boolean;
+  onResetPress: () => void;
+}): React.JSX.Element {
   return (
     <View style={styles.card}>
       <View style={styles.cardLeft}>
@@ -57,6 +65,21 @@ function UserRow({ user }: { user: UserStatus }): React.JSX.Element {
           <Text style={[styles.badgeTxt, { color: Colors.accentGold }]}>senha padrão</Text>
         </View>
       )}
+
+      <TouchableOpacity
+        style={[styles.resetBtn, confirming && styles.resetBtnConfirm]}
+        onPress={onResetPress}
+        disabled={resetting}
+        activeOpacity={0.7}
+      >
+        {resetting ? (
+          <ActivityIndicator size="small" color={Colors.error} />
+        ) : confirming ? (
+          <Text style={styles.resetConfirmTxt}>confirmar?</Text>
+        ) : (
+          <Ionicons name="key-outline" size={16} color={Colors.textSecondary} />
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
@@ -67,6 +90,10 @@ export default function GerenciaUsuariosScreen(): React.JSX.Element {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [toast, setToast] = useState('');
+  const confirmTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async (silent = false): Promise<void> => {
     if (!silent) setIsLoading(true);
@@ -84,7 +111,32 @@ export default function GerenciaUsuariosScreen(): React.JSX.Element {
 
   useEffect(() => {
     void load();
+    return () => {
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+    };
   }, [load]);
+
+  function handleResetPress(user: UserStatus): void {
+    // Primeiro toque pede confirmação; segundo toque (em até 4s) executa
+    if (confirmingId !== user.id) {
+      setConfirmingId(user.id);
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      confirmTimer.current = setTimeout(() => setConfirmingId(null), 4000);
+      return;
+    }
+    if (confirmTimer.current) clearTimeout(confirmTimer.current);
+    setConfirmingId(null);
+    setResettingId(user.id);
+    void resetUserPassword(user.id)
+      .then(({ nickname }) => {
+        setToast(`Senha de ${nickname} resetada para "123" — troca obrigatória no próximo login.`);
+        return load(true);
+      })
+      .catch((err: unknown) => {
+        setToast(err instanceof Error ? err.message : 'Erro ao resetar senha.');
+      })
+      .finally(() => setResettingId(null));
+  }
 
   const changed = users.filter((u) => u.passwordChanged).length;
   const pending = users.length - changed;
@@ -105,6 +157,13 @@ export default function GerenciaUsuariosScreen(): React.JSX.Element {
           <Text style={styles.subtitle}>Situação de senha e acesso</Text>
         </View>
       </View>
+
+      <Toast
+        visible={toast !== ''}
+        message={toast}
+        type="success"
+        onHide={() => setToast('')}
+      />
 
       {!isLoading && error === '' && (
         <View style={styles.summaryBar}>
@@ -135,7 +194,14 @@ export default function GerenciaUsuariosScreen(): React.JSX.Element {
         <FlatList
           data={users}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }: ListRenderItemInfo<UserStatus>) => <UserRow user={item} />}
+          renderItem={({ item }: ListRenderItemInfo<UserStatus>) => (
+            <UserRow
+              user={item}
+              confirming={confirmingId === item.id}
+              resetting={resettingId === item.id}
+              onResetPress={() => handleResetPress(item)}
+            />
+          )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -217,4 +283,19 @@ const styles = StyleSheet.create({
   badgeOk: { borderColor: 'rgba(34,197,94,0.35)', backgroundColor: 'rgba(34,197,94,0.08)' },
   badgePending: { borderColor: 'rgba(245,158,11,0.35)', backgroundColor: 'rgba(245,158,11,0.08)' },
   badgeTxt: { fontSize: 11, fontWeight: FontWeights.semibold },
+  resetBtn: {
+    minWidth: 34,
+    height: 34,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  resetBtnConfirm: {
+    borderColor: Colors.error,
+    backgroundColor: 'rgba(239,68,68,0.1)',
+  },
+  resetConfirmTxt: { fontSize: 10, fontWeight: FontWeights.bold, color: Colors.error },
 });
