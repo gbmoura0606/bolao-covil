@@ -101,6 +101,44 @@ export async function joinLeague(req: AuthenticatedRequest, res: Response): Prom
   }
 }
 
+export async function updateLeagueScoring(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { id } = req.params;
+  const { scoreResult, scoreGoalDiff, scoreExact } = req.body as {
+    scoreResult?: number;
+    scoreGoalDiff?: number;
+    scoreExact?: number;
+  };
+
+  try {
+    const league = await prisma.league.findUnique({ where: { id } });
+    if (!league) {
+      res.status(404).json({ error: 'Liga não encontrada.' });
+      return;
+    }
+    if (league.ownerId !== req.userId) {
+      res.status(403).json({ error: 'Apenas o dono da liga pode alterar a pontuação.' });
+      return;
+    }
+
+    const validate = (v: unknown): boolean =>
+      v === undefined || (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 99);
+    if (!validate(scoreResult) || !validate(scoreGoalDiff) || !validate(scoreExact)) {
+      res.status(400).json({ error: 'Valores de pontuação devem ser inteiros entre 0 e 99.' });
+      return;
+    }
+
+    const data: { scoreResult?: number; scoreGoalDiff?: number; scoreExact?: number } = {};
+    if (scoreResult !== undefined) data.scoreResult = scoreResult;
+    if (scoreGoalDiff !== undefined) data.scoreGoalDiff = scoreGoalDiff;
+    if (scoreExact !== undefined) data.scoreExact = scoreExact;
+
+    const updated = await prisma.league.update({ where: { id }, data });
+    res.json(updated);
+  } catch {
+    res.status(500).json({ error: 'Erro ao atualizar pontuação.' });
+  }
+}
+
 function generateLeagueCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';

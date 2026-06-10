@@ -78,11 +78,14 @@ model Prediction {
 }
 
 model League {
-  id        String   @id @default(cuid())
-  name      String
-  code      String   @unique
-  ownerId   String
-  createdAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  name          String
+  code          String   @unique
+  ownerId       String
+  scoreResult   Int      @default(1)
+  scoreGoalDiff Int      @default(3)
+  scoreExact    Int      @default(5)
+  createdAt     DateTime @default(now())
 
   owner       User         @relation("LeagueOwner", fields: [ownerId], references: [id])
   userLeagues UserLeague[]

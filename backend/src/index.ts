@@ -41,7 +41,20 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Rota não encontrada.' });
 });
 
+async function runMigrations(): Promise<void> {
+  const { PrismaClient } = await import('@prisma/client');
+  const p = new PrismaClient();
+  try {
+    await p.$executeRaw`ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "scoreResult" INTEGER NOT NULL DEFAULT 1`;
+    await p.$executeRaw`ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "scoreGoalDiff" INTEGER NOT NULL DEFAULT 3`;
+    await p.$executeRaw`ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "scoreExact" INTEGER NOT NULL DEFAULT 5`;
+  } finally {
+    await p.$disconnect();
+  }
+}
+
 async function start(): Promise<void> {
+  await runMigrations();
   await seedUsers();
   await seedWorldCup();
   app.listen(PORT, () => {

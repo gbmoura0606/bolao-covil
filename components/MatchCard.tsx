@@ -97,7 +97,7 @@ export function MatchCard({ match, prediction, onUpdateScore, onRetry }: MatchCa
         </Text>
       </View>
 
-      {/* Teams row */}
+      {/* Teams row — inputs sit in center column for OPEN matches */}
       <View style={styles.teamsRow}>
         <View style={styles.teamSide}>
           <FlagImage country={match.homeTeam.country} height={34} />
@@ -105,29 +105,8 @@ export function MatchCard({ match, prediction, onUpdateScore, onRetry }: MatchCa
         </View>
 
         <View style={styles.centerCol}>
-          {(isLive || isFinished) && match.homeScore !== undefined && match.awayScore !== undefined ? (
-            <Text style={[styles.score, isLive && styles.scoreLive]}>
-              {match.homeScore} – {match.awayScore}
-            </Text>
-          ) : (
-            <Text style={styles.vsText}>×</Text>
-          )}
-          <Text style={styles.timeText}>{match.matchTime}</Text>
-        </View>
-
-        <View style={[styles.teamSide, styles.teamSideRight]}>
-          <FlagImage country={match.awayTeam.country} height={34} />
-          <Text style={styles.teamName} numberOfLines={2}>{match.awayTeam.name}</Text>
-        </View>
-      </View>
-
-      {/* Prediction row */}
-      <View style={styles.predRow}>
-        {isOpen ? (
-          <View style={styles.predOpenRow}>
-            {/* Inputs */}
-            <View style={styles.predInputGroup}>
-              <Text style={styles.predLabel}>Palpite</Text>
+          {isOpen ? (
+            <View style={styles.inputsRow}>
               <TextInput
                 style={[styles.input, homeScore !== '' && styles.inputFilled]}
                 value={homeScore}
@@ -159,8 +138,27 @@ export function MatchCard({ match, prediction, onUpdateScore, onRetry }: MatchCa
                 selectTextOnFocus
               />
             </View>
+          ) : (isLive || isFinished) && match.homeScore !== undefined && match.awayScore !== undefined ? (
+            <Text style={[styles.score, isLive && styles.scoreLive]}>
+              {match.homeScore} – {match.awayScore}
+            </Text>
+          ) : (
+            <Text style={styles.vsText}>×</Text>
+          )}
+          <Text style={styles.timeText}>{match.matchTime}</Text>
+        </View>
 
-            {/* Save indicator */}
+        <View style={[styles.teamSide, styles.teamSideRight]}>
+          <FlagImage country={match.awayTeam.country} height={34} />
+          <Text style={styles.teamName} numberOfLines={2}>{match.awayTeam.name}</Text>
+        </View>
+      </View>
+
+      {/* Bottom strip — save status (OPEN) or locked prediction info */}
+      <View style={styles.predRow}>
+        {isOpen ? (
+          <View style={styles.saveRow}>
+            <Text style={styles.predLabel}>Palpite</Text>
             <View style={styles.saveIndicator}>
               {saveStatus === 'saving' && (
                 <ActivityIndicator size="small" color={Colors.accentGold} />
@@ -180,13 +178,12 @@ export function MatchCard({ match, prediction, onUpdateScore, onRetry }: MatchCa
                   <Text style={styles.errorText}>Erro · tentar novamente</Text>
                 </TouchableOpacity>
               )}
-              {(saveStatus === 'idle') && (
+              {saveStatus === 'idle' && (
                 <Text style={styles.hintText}>sem palpite</Text>
               )}
             </View>
           </View>
         ) : (
-          /* Locked state (CLOSED or FINISHED) */
           <View style={styles.lockedRow}>
             {hasPrediction &&
               prediction?.persistedHomeScore !== undefined &&
@@ -279,7 +276,36 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
   },
-  centerCol: { paddingHorizontal: Spacing.xs, alignItems: 'center', minWidth: 86 },
+
+  centerCol: {
+    paddingHorizontal: Spacing.xs,
+    alignItems: 'center',
+    minWidth: 120,
+  },
+  inputsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  input: {
+    backgroundColor: Colors.backgroundAlt,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.sm,
+    width: 40,
+    height: 40,
+    fontSize: FontSizes.lg,
+    fontWeight: FontWeights.bold,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  inputFilled: { borderColor: Colors.accentGold },
+  inputSep: {
+    fontSize: FontSizes.md,
+    color: Colors.textSecondary,
+    fontWeight: FontWeights.bold,
+  },
+
   score: { fontSize: FontSizes.xl, fontWeight: FontWeights.bold, color: Colors.textPrimary },
   scoreLive: { color: Colors.error },
   vsText: { fontSize: FontSizes.xl, fontWeight: FontWeights.bold, color: Colors.border },
@@ -290,39 +316,15 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
     backgroundColor: 'rgba(0,0,0,0.18)',
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 7,
+    paddingVertical: 6,
   },
 
-  predOpenRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  predInputGroup: {
+  saveRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
   },
   predLabel: { fontSize: 11, color: Colors.textSecondary, fontWeight: FontWeights.medium },
-  input: {
-    backgroundColor: Colors.backgroundAlt,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.md,
-    width: 48,
-    height: 48,
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.bold,
-    color: Colors.textPrimary,
-    textAlign: 'center',
-  },
-  inputFilled: { borderColor: Colors.accentGold },
-  inputSep: {
-    fontSize: FontSizes.lg,
-    color: Colors.textSecondary,
-    fontWeight: FontWeights.bold,
-  },
-
   saveIndicator: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   dotIndicator: { fontSize: FontSizes.md, color: Colors.textSecondary, letterSpacing: 2 },
   savedRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },

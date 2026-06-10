@@ -81,7 +81,7 @@ export default function LigasScreen(): React.JSX.Element {
     return (
       <LeagueCard
         league={item}
-        onPress={() => router.push('/liga-ranking')}
+        onPress={() => router.push({ pathname: '/liga-ranking', params: { leagueId: item.id } })}
         onConfigPress={() => setConfigLeague(item)}
       />
     );
