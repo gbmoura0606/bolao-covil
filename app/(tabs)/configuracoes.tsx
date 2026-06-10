@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,22 +30,11 @@ export default function ConfiguracoesScreen(): React.JSX.Element {
   const { user, logout, canAccessGerencia } = useAuth();
   const router = useRouter();
 
+  // Sem Alert.alert: diálogos multi-botão não funcionam no react-native-web,
+  // o que deixava o botão Sair sem efeito no navegador.
   async function handleLogout(): Promise<void> {
-    Alert.alert(
-      'Sair',
-      'Tem certeza que deseja sair da conta?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sair',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-            router.replace('/landing');
-          },
-        },
-      ]
-    );
+    await logout();
+    router.replace('/landing');
   }
 
   const menuItems: MenuItemConfig[] = [
@@ -64,22 +52,6 @@ export default function ConfiguracoesScreen(): React.JSX.Element {
           onPress: () => router.push('/gerencia/usuarios'),
         }]
       : []),
-    {
-      id: 'notifications',
-      label: 'Notificações',
-      icon: 'notifications-outline',
-      onPress: () => {
-        Alert.alert('Em breve', 'Funcionalidade disponível na próxima versão.');
-      },
-    },
-    {
-      id: 'theme',
-      label: 'Tema',
-      icon: 'color-palette-outline',
-      onPress: () => {
-        Alert.alert('Tema', 'Tema escuro ativado (padrão do Bolão Covil).');
-      },
-    },
     {
       id: 'logout',
       label: 'Sair',
