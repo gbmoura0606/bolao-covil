@@ -1,5 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 interface JwtPayload {
   userId: string;
@@ -35,5 +38,23 @@ export function requireAuth(
     next();
   } catch {
     res.status(401).json({ error: 'Token inválido ou expirado.' });
+  }
+}
+
+/** Exige canAccessGerencia — usar APÓS requireAuth nas rotas administrativas. */
+export async function requireGerencia(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!user?.canAccessGerencia) {
+      res.status(403).json({ error: 'Acesso restrito à gerência.' });
+      return;
+    }
+    next();
+  } catch {
+    res.status(500).json({ error: 'Erro ao verificar permissões.' });
   }
 }

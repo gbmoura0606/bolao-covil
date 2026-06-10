@@ -16,6 +16,7 @@ model User {
   passwordHash       String
   mustChangePassword Boolean  @default(true)
   canAccessGerencia  Boolean  @default(true)
+  lastLoginAt        DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

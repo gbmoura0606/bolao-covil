@@ -48,6 +48,7 @@ async function runMigrations(): Promise<void> {
     await p.$executeRaw`ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "scoreResult" INTEGER NOT NULL DEFAULT 1`;
     await p.$executeRaw`ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "scoreGoalDiff" INTEGER NOT NULL DEFAULT 3`;
     await p.$executeRaw`ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "scoreExact" INTEGER NOT NULL DEFAULT 5`;
+    await p.$executeRaw`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastLoginAt" TIMESTAMP(3)`;
   } finally {
     await p.$disconnect();
   }

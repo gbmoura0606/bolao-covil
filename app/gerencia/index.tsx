@@ -238,9 +238,18 @@ export default function GerenciaHomeScreen(): React.JSX.Element {
             <Text style={styles.subtitle}>Olá, {user?.nickname ?? ''}</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
-          <Ionicons name="log-out-outline" size={22} color={Colors.textSecondary} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            onPress={() => router.push('/gerencia/usuarios')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="people-outline" size={22} color="#60A5FA" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+            <Ionicons name="log-out-outline" size={22} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.filterBar}>
@@ -309,6 +318,7 @@ const styles = StyleSheet.create({
   icon: { fontSize: 22 },
   title: { fontSize: FontSizes.md, fontWeight: FontWeights.bold, color: '#60A5FA' },
   subtitle: { fontSize: FontSizes.xs, color: Colors.textSecondary, marginTop: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
   logoutBtn: { padding: Spacing.sm },
   filterBar: {
     flexDirection: 'row',

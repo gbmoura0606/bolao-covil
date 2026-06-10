@@ -65,6 +65,11 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
     const token = generateToken(user.id, user.nickname);
     res.json({
       token,
@@ -98,6 +103,35 @@ export async function changePassword(req: AuthenticatedRequest, res: Response): 
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Erro interno do servidor.' });
+  }
+}
+
+/** Painel da gerência: situação de senha e último login de cada usuário. */
+export async function listUsersStatus(_req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        nickname: true,
+        mustChangePassword: true,
+        canAccessGerencia: true,
+        lastLoginAt: true,
+        createdAt: true,
+        _count: { select: { predictions: true } },
+      },
+      orderBy: { nickname: 'asc' },
+    });
+    res.json(users.map((u) => ({
+      id: u.id,
+      nickname: u.nickname,
+      passwordChanged: !u.mustChangePassword,
+      canAccessGerencia: u.canAccessGerencia,
+      lastLoginAt: u.lastLoginAt,
+      predictionCount: u._count.predictions,
+      createdAt: u.createdAt,
+    })));
+  } catch {
+    res.status(500).json({ error: 'Erro ao listar usuários.' });
   }
 }
 
