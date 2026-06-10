@@ -12,7 +12,7 @@ interface SessionData {
 }
 
 export function useAuth(): AuthState & {
-  login: (credentials: LoginCredentials) => Promise<{ mustChangePassword: boolean }>;
+  login: (credentials: LoginCredentials) => Promise<{ mustChangePassword: boolean; canAccessGerencia: boolean }>;
   logout: () => Promise<void>;
   changePassword: (newPassword: string) => Promise<void>;
 } {
