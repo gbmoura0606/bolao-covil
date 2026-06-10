@@ -13,6 +13,7 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { MatchCard } from '@/components/MatchCard';
 import { RankingWidget } from '@/components/RankingWidget';
 import { usePredictions } from '@/hooks/usePredictions';
+import { useAuth } from '@/hooks/useAuth';
 import { getMatches } from '@/services/matches';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius } from '@/constants/theme';
 import type { Match } from '@/types';
@@ -170,6 +171,7 @@ export default function JogosScreen(): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<TabId>('open');
   const [rankingKey, setRankingKey] = useState(0);
 
+  const { user } = useAuth();
   const { predictions, updateScore, retryPrediction, refreshPredictions } = usePredictions();
 
   // Carrega partidas — silent=true = background refresh (sem spinner global)
@@ -285,6 +287,7 @@ export default function JogosScreen(): React.JSX.Element {
               prediction={predictions[item.id]}
               onUpdateScore={(team, value) => updateScore(item.id, team, value)}
               onRetry={() => retryPrediction(item.id)}
+              currentUserId={user?.id}
             />
           )}
           renderSectionHeader={({ section }: { section: SectionListData<Match, MatchSection> }) => (

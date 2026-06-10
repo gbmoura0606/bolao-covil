@@ -29,6 +29,7 @@ type DbMatch = {
   awayTeamId: string | null;
   homeScore: number | null;
   awayScore: number | null;
+  status: string;
   matchDate: Date;
   venue: string | null;
   homeSlot: string | null;
@@ -182,6 +183,7 @@ export async function getStandings(_req: AuthenticatedRequest, res: Response): P
             awayTeam: m.awayTeam,
             homeScore: m.homeScore,
             awayScore: m.awayScore,
+            status: m.status,
             matchDate: m.matchDate.toISOString(),
             venue: m.venue,
           })),

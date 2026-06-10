@@ -24,6 +24,7 @@ export interface GroupMatch {
   awayTeam: TeamInfo | null;
   homeScore: number | null;
   awayScore: number | null;
+  status: string;
   matchDate: string;
   venue: string | null;
 }

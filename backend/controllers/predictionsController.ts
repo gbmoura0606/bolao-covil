@@ -14,6 +14,39 @@ function predictionsClosed(match: { status: string; matchDate: Date }): boolean 
   return match.status !== 'OPEN' || hasKickedOff(match.matchDate);
 }
 
+/**
+ * Palpites de TODOS os usuários para uma partida.
+ * Só liberados depois que a partida fecha (status ≠ OPEN ou horário do jogo
+ * atingido) — antes disso ninguém pode copiar o palpite dos outros.
+ */
+export async function listMatchPredictions(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { matchId } = req.params;
+
+  try {
+    const match = await prisma.match.findUnique({ where: { id: matchId } });
+    if (!match) { res.status(404).json({ error: 'Partida não encontrada.' }); return; }
+    if (!predictionsClosed(match)) {
+      res.status(403).json({ error: 'Os palpites do grupo ficam visíveis quando a partida começa.' });
+      return;
+    }
+
+    const predictions = await prisma.prediction.findMany({
+      where: { matchId },
+      include: { user: { select: { id: true, nickname: true } } },
+      orderBy: { user: { nickname: 'asc' } },
+    });
+    res.json(predictions.map((p) => ({
+      userId: p.user.id,
+      nickname: p.user.nickname,
+      homeScore: p.homeScore,
+      awayScore: p.awayScore,
+      points: p.points,
+    })));
+  } catch {
+    res.status(500).json({ error: 'Erro ao buscar palpites da partida.' });
+  }
+}
+
 export async function getUserPredictions(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const predictions = await prisma.prediction.findMany({

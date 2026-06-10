@@ -1,14 +1,236 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  Dimensions, Platform, UIManager, ActivityIndicator,
+  Dimensions, Platform, UIManager, ActivityIndicator, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FlagImage } from '@/components/FlagImage';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { useAuth } from '@/hooks/useAuth';
+import { patchMatchScore, resetMatchScore } from '@/services/matches';
 import { getStandingsData } from '@/services/standings';
-import type { StandingsData, StandingRow, ApiGroup, BracketMatch } from '@/services/standings';
+import type { StandingsData, StandingRow, ApiGroup, BracketMatch, GroupMatch } from '@/services/standings';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '@/constants/theme';
+
+const FINISH_DELAY_MS = 105 * 60_000;
+const CONFIRM_TIMEOUT_MS = 4000;
+
+function kickoffLocal(iso: string): Date {
+  return new Date(iso.replace(/(\.\d{3})?Z$/, ''));
+}
+
+const STATUS_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  OPEN:     { label: 'PRÉ-JOGO',     color: Colors.success,    bg: 'rgba(34,197,94,0.12)' },
+  CLOSED:   { label: 'EM ANDAMENTO', color: Colors.accentGold, bg: 'rgba(245,158,11,0.12)' },
+  FINISHED: { label: 'ENCERRADO',    color: Colors.error,      bg: 'rgba(239,68,68,0.12)' },
+};
+
+function MatchStatusBadge({ status }: { status: string }): React.JSX.Element {
+  const b = STATUS_BADGE[status] ?? STATUS_BADGE.OPEN;
+  return (
+    <View style={[adS.badge, { backgroundColor: b.bg, borderColor: b.color }]}>
+      <View style={[adS.badgeDot, { backgroundColor: b.color }]} />
+      <Text style={[adS.badgeTxt, { color: b.color }]}>{b.label}</Text>
+    </View>
+  );
+}
+
+function AdminMatchControls({
+  match,
+  onSaved,
+}: {
+  match: GroupMatch;
+  onSaved: () => void;
+}): React.JSX.Element {
+  const [home, setHome] = useState(match.homeScore?.toString() ?? '');
+  const [away, setAway] = useState(match.awayScore?.toString() ?? '');
+  const [confirming, setConfirming] = useState<'save' | 'finish' | 'reset' | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setHome(match.homeScore?.toString() ?? '');
+    setAway(match.awayScore?.toString() ?? '');
+  }, [match.homeScore, match.awayScore]);
+
+  useEffect(() => () => { if (confirmTimer.current) clearTimeout(confirmTimer.current); }, []);
+
+  const isFinished = match.status === 'FINISHED';
+  const kickoff = kickoffLocal(match.matchDate);
+  const started = Date.now() >= kickoff.getTime();
+  const canFinish = !isFinished && Date.now() >= kickoff.getTime() + FINISH_DELAY_MS;
+  const canReset = !isFinished && !started;
+  const hasScore = home !== '' && away !== '';
+  const dirty = home !== (match.homeScore?.toString() ?? '') || away !== (match.awayScore?.toString() ?? '');
+
+  function arm(action: 'save' | 'finish' | 'reset'): boolean {
+    if (confirming === action) {
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      setConfirming(null);
+      return true;
+    }
+    setConfirming(action);
+    if (confirmTimer.current) clearTimeout(confirmTimer.current);
+    confirmTimer.current = setTimeout(() => setConfirming(null), CONFIRM_TIMEOUT_MS);
+    return false;
+  }
+
+  async function doSave(body: Record<string, unknown>): Promise<void> {
+    setError('');
+    setSaving(true);
+    try {
+      await patchMatchScore(match.id, body);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao salvar.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function doReset(): Promise<void> {
+    setError('');
+    setSaving(true);
+    try {
+      await resetMatchScore(match.id);
+      setHome('');
+      setAway('');
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao resetar.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (isFinished) {
+    return (
+      <View style={adS.lockedRow}>
+        <Ionicons name="lock-closed" size={10} color={Colors.textSecondary} />
+        <Text style={adS.lockedTxt}>Encerrado — placar travado</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={adS.adminWrap}>
+      <View style={adS.inputsRow}>
+        <TextInput
+          style={[adS.input, home !== '' && adS.inputFilled]}
+          value={home}
+          onChangeText={(v) => setHome(v.replace(/[^0-9]/g, '').slice(0, 2))}
+          keyboardType="number-pad"
+          maxLength={2}
+          placeholder="?"
+          placeholderTextColor={Colors.border}
+          selectTextOnFocus
+        />
+        <Text style={adS.sep}>×</Text>
+        <TextInput
+          style={[adS.input, away !== '' && adS.inputFilled]}
+          value={away}
+          onChangeText={(v) => setAway(v.replace(/[^0-9]/g, '').slice(0, 2))}
+          keyboardType="number-pad"
+          maxLength={2}
+          placeholder="?"
+          placeholderTextColor={Colors.border}
+          selectTextOnFocus
+        />
+      </View>
+
+      <View style={adS.btnsRow}>
+        {dirty && hasScore && (
+          <TouchableOpacity
+            style={[adS.btn, adS.btnSave, confirming === 'save' && adS.btnConfirm]}
+            onPress={() => {
+              if (!arm('save')) return;
+              const body: Record<string, unknown> = {
+                homeScore: parseInt(home, 10),
+                awayScore: parseInt(away, 10),
+              };
+              if (match.status === 'OPEN' && started) body.status = 'CLOSED';
+              void doSave(body);
+            }}
+            disabled={saving}
+            activeOpacity={0.8}
+          >
+            {saving && confirming !== 'finish' && confirming !== 'reset'
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={adS.btnTxt}>{confirming === 'save' ? 'Confirmar?' : 'Salvar'}</Text>}
+          </TouchableOpacity>
+        )}
+        {canFinish && hasScore && (
+          <TouchableOpacity
+            style={[adS.btn, adS.btnFinish, confirming === 'finish' && adS.btnConfirm]}
+            onPress={() => {
+              if (!arm('finish')) return;
+              void doSave({ homeScore: parseInt(home, 10), awayScore: parseInt(away, 10), status: 'FINISHED' });
+            }}
+            disabled={saving}
+            activeOpacity={0.8}
+          >
+            {saving && confirming === 'finish'
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <><Ionicons name="lock-closed" size={11} color="#fff" /><Text style={adS.btnTxt}>{confirming === 'finish' ? 'Confirmar?' : 'Encerrar'}</Text></>}
+          </TouchableOpacity>
+        )}
+        {canReset && (
+          <TouchableOpacity
+            style={[adS.btn, adS.btnReset, confirming === 'reset' && adS.btnConfirm]}
+            onPress={() => { if (!arm('reset')) return; void doReset(); }}
+            disabled={saving}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="refresh" size={11} color="#fff" />
+            <Text style={adS.btnTxt}>{confirming === 'reset' ? 'Resetar?' : 'Resetar'}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {error !== '' && <Text style={adS.error}>{error}</Text>}
+    </View>
+  );
+}
+
+const adS = StyleSheet.create({
+  badge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: BorderRadius.sm, borderWidth: 1,
+  },
+  badgeDot: { width: 5, height: 5, borderRadius: 3 },
+  badgeTxt: { fontSize: 9, fontWeight: FontWeights.bold, letterSpacing: 0.5 },
+  lockedRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 4, paddingTop: 3, paddingBottom: 4,
+  },
+  lockedTxt: { fontSize: 9, color: Colors.textSecondary },
+  adminWrap: { paddingTop: Spacing.xs, paddingBottom: 2 },
+  inputsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginBottom: 5 },
+  input: {
+    backgroundColor: Colors.backgroundAlt,
+    borderWidth: 2, borderColor: Colors.border,
+    borderRadius: BorderRadius.sm,
+    width: 36, height: 36,
+    fontSize: FontSizes.md, fontWeight: FontWeights.bold,
+    color: Colors.textPrimary, textAlign: 'center',
+  },
+  inputFilled: { borderColor: '#3B82F6' },
+  sep: { fontSize: FontSizes.sm, color: Colors.textSecondary, fontWeight: FontWeights.bold },
+  btnsRow: { flexDirection: 'row', gap: 4, flexWrap: 'wrap', justifyContent: 'center' },
+  btn: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingVertical: 5, paddingHorizontal: 8,
+    borderRadius: BorderRadius.sm,
+  },
+  btnSave: { backgroundColor: '#3B82F6' },
+  btnFinish: { backgroundColor: Colors.error },
+  btnReset: { backgroundColor: Colors.textSecondary },
+  btnConfirm: { opacity: 0.85 },
+  btnTxt: { fontSize: 10, fontWeight: FontWeights.bold, color: '#fff' },
+  error: { fontSize: 10, color: Colors.error, textAlign: 'center', marginTop: 3 },
+});
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -177,7 +399,13 @@ const stS = StyleSheet.create({
 
 // ─── Round matches panel ──────────────────────────────────────────────────────
 
-function MatchesPanel({ group }: { group: ApiGroup }): React.JSX.Element {
+function MatchesPanel({
+  group, isAdmin, onMatchSaved,
+}: {
+  group: ApiGroup;
+  isAdmin: boolean;
+  onMatchSaved: () => void;
+}): React.JSX.Element {
   const [round, setRound] = useState<1 | 2 | 3>(1);
   const matches = group.matches.filter((m) => m.round === `R${round}`);
 
@@ -194,23 +422,34 @@ function MatchesPanel({ group }: { group: ApiGroup }): React.JSX.Element {
       </View>
       {matches.map((m) => (
         <View key={m.id} style={mpS.card}>
-          <Text style={mpS.venue} numberOfLines={1}>{m.venue}</Text>
-          <Text style={mpS.date}>{fmtDate(m.matchDate)} · {m.matchDate.substring(11, 16)}</Text>
+          <View style={mpS.cardTop}>
+            <View style={mpS.venueDate}>
+              <Text style={mpS.venue} numberOfLines={1}>{m.venue}</Text>
+              <Text style={mpS.date}>{fmtDate(m.matchDate)} · {m.matchDate.substring(11, 16)}</Text>
+            </View>
+            <MatchStatusBadge status={m.status} />
+          </View>
           <View style={mpS.row}>
             <View style={mpS.side}>
               {m.homeTeam && <FlagImage country={m.homeTeam.country} height={22} />}
               <Text style={mpS.mTeam} numberOfLines={2}>{m.homeTeam?.name ?? '?'}</Text>
             </View>
             <View style={mpS.scoreBox}>
-              {m.homeScore !== null && m.awayScore !== null
+              {!isAdmin && (m.homeScore !== null && m.awayScore !== null
                 ? <Text style={mpS.score}>{m.homeScore} – {m.awayScore}</Text>
-                : <View style={mpS.timeBox}><Text style={mpS.time}>{m.matchDate.substring(11, 16)}</Text></View>}
+                : <View style={mpS.timeBox}><Text style={mpS.time}>{m.matchDate.substring(11, 16)}</Text></View>)}
+              {isAdmin && m.status === 'FINISHED' && m.homeScore !== null && m.awayScore !== null && (
+                <Text style={mpS.score}>{m.homeScore} – {m.awayScore}</Text>
+              )}
             </View>
             <View style={[mpS.side, mpS.sideAway]}>
-              <Text style={mpS.mTeam} numberOfLines={2}>{m.awayTeam?.name ?? '?'}</Text>
               {m.awayTeam && <FlagImage country={m.awayTeam.country} height={22} />}
+              <Text style={mpS.mTeam} numberOfLines={2}>{m.awayTeam?.name ?? '?'}</Text>
             </View>
           </View>
+          {isAdmin && (
+            <AdminMatchControls match={m} onSaved={onMatchSaved} />
+          )}
         </View>
       ))}
     </View>
@@ -221,9 +460,11 @@ const mpS = StyleSheet.create({
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.xs, paddingVertical: Spacing.sm, backgroundColor: Colors.backgroundAlt, borderBottomWidth: 1, borderBottomColor: Colors.border },
   arr: { width: 32, alignItems: 'center' },
   roundLbl: { fontSize: FontSizes.sm, fontWeight: FontWeights.bold, color: Colors.textPrimary },
-  card: { paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: 'rgba(55,65,81,0.4)' },
+  card: { paddingHorizontal: Spacing.sm, paddingTop: Spacing.xs, paddingBottom: Spacing.sm, borderBottomWidth: 1, borderBottomColor: 'rgba(55,65,81,0.4)' },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: Spacing.xs },
+  venueDate: { flex: 1 },
   venue: { fontSize: 10, color: Colors.accentGold, fontWeight: FontWeights.medium },
-  date: { fontSize: 10, color: Colors.textSecondary, marginBottom: Spacing.xs },
+  date: { fontSize: 10, color: Colors.textSecondary },
   row: { flexDirection: 'row', alignItems: 'center' },
   side: { flex: 1, alignItems: 'center', gap: 3 },
   sideAway: {},
@@ -237,7 +478,14 @@ const mpS = StyleSheet.create({
 
 // ─── Group block ──────────────────────────────────────────────────────────────
 
-function GroupBlock({ group, qualifyingThirdIds }: { group: ApiGroup; qualifyingThirdIds: Set<string> }): React.JSX.Element {
+function GroupBlock({
+  group, qualifyingThirdIds, isAdmin, onMatchSaved,
+}: {
+  group: ApiGroup;
+  qualifyingThirdIds: Set<string>;
+  isAdmin: boolean;
+  onMatchSaved: () => void;
+}): React.JSX.Element {
   return (
     <View style={gbS.card}>
       <View style={gbS.header}>
@@ -250,13 +498,13 @@ function GroupBlock({ group, qualifyingThirdIds }: { group: ApiGroup; qualifying
         <View style={gbS.split}>
           <View style={gbS.left}><StandingsTable standings={group.standings} qualifyingThirdIds={qualifyingThirdIds} /></View>
           <View style={gbS.divider} />
-          <View style={gbS.right}><MatchesPanel group={group} /></View>
+          <View style={gbS.right}><MatchesPanel group={group} isAdmin={isAdmin} onMatchSaved={onMatchSaved} /></View>
         </View>
       ) : (
         <>
           <StandingsTable standings={group.standings} qualifyingThirdIds={qualifyingThirdIds} />
           <View style={{ height: 1, backgroundColor: Colors.border }} />
-          <MatchesPanel group={group} />
+          <MatchesPanel group={group} isAdmin={isAdmin} onMatchSaved={onMatchSaved} />
         </>
       )}
     </View>
@@ -276,11 +524,18 @@ const gbS = StyleSheet.create({
 
 // ─── FASE DE GRUPOS ───────────────────────────────────────────────────────────
 
-function FaseDeGrupos({ groups, thirds }: { groups: ApiGroup[]; thirds: StandingRow[] }): React.JSX.Element {
+function FaseDeGrupos({
+  groups, thirds, isAdmin, onMatchSaved,
+}: {
+  groups: ApiGroup[];
+  thirds: StandingRow[];
+  isAdmin: boolean;
+  onMatchSaved: () => void;
+}): React.JSX.Element {
   const qualifyingThirdIds = new Set(thirds.slice(0, 8).map((s) => s.team.id));
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: Spacing.sm, paddingBottom: Spacing.xxl }}>
-      {groups.map((g) => <GroupBlock key={g.id} group={g} qualifyingThirdIds={qualifyingThirdIds} />)}
+      {groups.map((g) => <GroupBlock key={g.id} group={g} qualifyingThirdIds={qualifyingThirdIds} isAdmin={isAdmin} onMatchSaved={onMatchSaved} />)}
     </ScrollView>
   );
 }
@@ -550,13 +805,14 @@ const mmS = StyleSheet.create({
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function TabelasScreen(): React.JSX.Element {
+  const { canAccessGerencia } = useAuth();
   const [phase, setPhase] = useState<Phase>('grupos');
   const [data, setData] = useState<StandingsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const loadData = useCallback(async (): Promise<void> => {
-    setIsLoading(true);
+  const loadData = useCallback(async (silent = false): Promise<void> => {
+    if (!silent) setIsLoading(true);
     setError('');
     try {
       const result = await getStandingsData();
@@ -572,6 +828,8 @@ export default function TabelasScreen(): React.JSX.Element {
     void loadData();
   }, [loadData]);
 
+  const handleMatchSaved = useCallback(() => { void loadData(true); }, [loadData]);
+
   return (
     <View style={{ flex: 1, backgroundColor: Colors.backgroundAlt }}>
       <ScreenHeader title="Tabelas" subtitle="Copa do Mundo FIFA 2026" />
@@ -585,13 +843,13 @@ export default function TabelasScreen(): React.JSX.Element {
         ) : error !== '' ? (
           <View style={rootS.center}>
             <Text style={rootS.errorText}>{error}</Text>
-            <TouchableOpacity style={rootS.retryBtn} onPress={loadData} activeOpacity={0.8}>
+            <TouchableOpacity style={rootS.retryBtn} onPress={() => void loadData()} activeOpacity={0.8}>
               <Text style={rootS.retryTxt}>Tentar novamente</Text>
             </TouchableOpacity>
           </View>
         ) : data !== null ? (
           <>
-            {phase === 'grupos'    && <FaseDeGrupos groups={data.groups} thirds={data.thirds} />}
+            {phase === 'grupos'    && <FaseDeGrupos groups={data.groups} thirds={data.thirds} isAdmin={canAccessGerencia} onMatchSaved={handleMatchSaved} />}
             {phase === 'terceiros' && <TerceirosColocados thirds={data.thirds} />}
             {phase === 'criterios' && <CriteriosView overall={data.overall} />}
             {phase === 'matamata'  && <MataMataView bracket={data.bracket} />}

@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { PrismaClient, MatchStatus } from '@prisma/client';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import { computePoints } from '../config/scoring';
+import { hasKickedOff } from '../config/time';
 
 const prisma = new PrismaClient();
 
@@ -115,5 +116,33 @@ export async function updateMatchScore(req: AuthenticatedRequest, res: Response)
     res.json(match);
   } catch {
     res.status(500).json({ error: 'Erro ao atualizar partida.' });
+  }
+}
+
+/** Limpa o placar e volta o status para OPEN. Só permitido antes do início. */
+export async function resetMatch(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { id } = req.params;
+  try {
+    const existing = await prisma.match.findUnique({ where: { id } });
+    if (!existing) {
+      res.status(404).json({ error: 'Partida não encontrada.' });
+      return;
+    }
+    if (existing.status === 'FINISHED') {
+      res.status(409).json({ error: 'Partida encerrada não pode ser resetada.' });
+      return;
+    }
+    if (hasKickedOff(existing.matchDate)) {
+      res.status(409).json({ error: 'Partida já iniciada — só é possível resetar antes do início.' });
+      return;
+    }
+    await prisma.match.update({
+      where: { id },
+      data: { homeScore: null, awayScore: null, status: 'OPEN' },
+    });
+    console.log(`[gerencia] ${req.userNickname ?? req.userId} resetou partida ${existing.externalId ?? id}`);
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Erro ao resetar partida.' });
   }
 }

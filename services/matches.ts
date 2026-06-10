@@ -45,3 +45,14 @@ export async function getMatchById(id: string): Promise<Match | undefined> {
     return undefined;
   }
 }
+
+export async function patchMatchScore(
+  id: string,
+  body: { homeScore?: number; awayScore?: number; status?: string },
+): Promise<void> {
+  await api.patch(`/api/matches/${id}/score`, body);
+}
+
+export async function resetMatchScore(id: string): Promise<void> {
+  await api.post(`/api/matches/${id}/reset`);
+}

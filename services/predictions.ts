@@ -17,3 +17,16 @@ export async function upsertPrediction(
   });
   return response.data;
 }
+
+export interface GroupPrediction {
+  userId: string;
+  nickname: string;
+  homeScore: number;
+  awayScore: number;
+  points: number | null;
+}
+
+export async function getMatchPredictions(matchId: string): Promise<GroupPrediction[]> {
+  const response = await api.get<GroupPrediction[]>(`/api/predictions/match/${matchId}`);
+  return response.data;
+}

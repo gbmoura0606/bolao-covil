@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FlagImage } from '@/components/FlagImage';
+import { GroupPredictionsPanel } from '@/components/GroupPredictionsPanel';
 import { Colors, FontSizes, FontWeights, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 import type { Match } from '@/types';
 import type { PredictionEdit } from '@/hooks/usePredictions';
@@ -19,6 +20,7 @@ export interface MatchCardProps {
   prediction: PredictionEdit | undefined;
   onUpdateScore: (team: 'home' | 'away', value: string) => void;
   onRetry: () => void;
+  currentUserId?: string;
 }
 
 const ROUND_LABEL: Record<string, string> = {
@@ -57,7 +59,7 @@ function hasMatchStarted(match: Match): boolean {
   return new Date().getTime() >= new Date(`${match.matchDate}T${match.matchTime}:00`).getTime();
 }
 
-export function MatchCard({ match, prediction, onUpdateScore, onRetry }: MatchCardProps): React.JSX.Element {
+export function MatchCard({ match, prediction, onUpdateScore, onRetry, currentUserId }: MatchCardProps): React.JSX.Element {
   const awayInputRef = useRef<TextInput>(null);
 
   const started = hasMatchStarted(match);
@@ -229,6 +231,15 @@ export function MatchCard({ match, prediction, onUpdateScore, onRetry }: MatchCa
           </View>
         )}
       </View>
+
+      {/* Palpites do grupo — visíveis após o início do jogo */}
+      {!isOpen && (
+        <GroupPredictionsPanel
+          matchId={match.id}
+          currentUserId={currentUserId}
+          isFinished={isFinished}
+        />
+      )}
 
     </View>
   );
