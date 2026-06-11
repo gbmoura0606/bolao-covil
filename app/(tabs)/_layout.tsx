@@ -15,7 +15,7 @@ interface TabConfig {
 }
 
 const TABS: TabConfig[] = [
-  { name: 'jogos', title: 'Jogos', icon: 'american-football-outline', iconFocused: 'american-football' },
+  { name: 'jogos', title: 'Jogos', icon: 'football-outline', iconFocused: 'football' },
   { name: 'ranking', title: 'Tabelas', icon: 'trophy-outline', iconFocused: 'trophy' },
   { name: 'ligas', title: 'Ligas', icon: 'people-outline', iconFocused: 'people' },
   { name: 'configuracoes', title: 'Config', icon: 'settings-outline', iconFocused: 'settings' },
