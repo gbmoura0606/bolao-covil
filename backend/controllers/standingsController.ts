@@ -45,6 +45,41 @@ function compareStandings(a: StandingRow, b: StandingRow): number {
   return a.team.name.localeCompare(b.team.name);
 }
 
+function breakTieH2H(teams: StandingRow[], groupMatches: DbMatch[]): StandingRow[] {
+  if (teams.length === 1) return teams;
+  const ids = new Set(teams.map((t) => t.team.id));
+  const h2h = groupMatches.filter(
+    (m) =>
+      m.homeScore !== null &&
+      m.awayScore !== null &&
+      m.homeTeamId !== null && ids.has(m.homeTeamId) &&
+      m.awayTeamId !== null && ids.has(m.awayTeamId),
+  );
+  const pts = new Map<string, number>();
+  const gd  = new Map<string, number>();
+  const gf  = new Map<string, number>();
+  for (const t of teams) { pts.set(t.team.id, 0); gd.set(t.team.id, 0); gf.set(t.team.id, 0); }
+  for (const m of h2h) {
+    const ho = m.homeTeamId!, aw = m.awayTeamId!, hs = m.homeScore!, as_ = m.awayScore!;
+    gf.set(ho, gf.get(ho)! + hs); gf.set(aw, gf.get(aw)! + as_);
+    gd.set(ho, gd.get(ho)! + (hs - as_)); gd.set(aw, gd.get(aw)! + (as_ - hs));
+    if (hs > as_)       pts.set(ho, pts.get(ho)! + 3);
+    else if (hs === as_) { pts.set(ho, pts.get(ho)! + 1); pts.set(aw, pts.get(aw)! + 1); }
+    else                pts.set(aw, pts.get(aw)! + 3);
+  }
+  return [...teams].sort((a, b) => {
+    const ap = pts.get(a.team.id)!, bp = pts.get(b.team.id)!;
+    if (bp !== ap) return bp - ap;
+    const agd = gd.get(a.team.id)!, bgd = gd.get(b.team.id)!;
+    if (bgd !== agd) return bgd - agd;
+    const agf = gf.get(a.team.id)!, bgf = gf.get(b.team.id)!;
+    if (bgf !== agf) return bgf - agf;
+    if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
+    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+    return a.team.name.localeCompare(b.team.name);
+  });
+}
+
 function computeStandings(matches: DbMatch[], groupId: string): StandingRow[] {
   const map = new Map<string, StandingRow>();
 
@@ -96,7 +131,17 @@ function computeStandings(matches: DbMatch[], groupId: string): StandingRow[] {
     s.goalDiff = s.goalsFor - s.goalsAgainst;
   }
 
-  return Array.from(map.values()).sort(compareStandings);
+  // Sort: points first, then H2H within tied groups, then overall GD/GF/alpha
+  const rows = Array.from(map.values()).sort(compareStandings);
+  const result: StandingRow[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    let j = i + 1;
+    while (j < rows.length && rows[j].points === rows[i].points) j++;
+    result.push(...breakTieH2H(rows.slice(i, j), matches));
+    i = j;
+  }
+  return result;
 }
 
 function resolveSlot(
@@ -113,9 +158,13 @@ function resolveSlot(
     return groupStandings.get(groupSlot[2])?.[pos]?.team ?? null;
   }
 
-  const thirdSlot = slot.match(/^3º melhor \((\d+)\)$/);
-  if (thirdSlot) {
-    return thirdsRanking[parseInt(thirdSlot[1]) - 1]?.team ?? null;
+  const thirdFromGroups = slot.match(/^Melhor 3º \(([A-L/]+)\)$/);
+  if (thirdFromGroups) {
+    const allowed = new Set(thirdFromGroups[1].split('/'));
+    for (const t of thirdsRanking) {
+      if (allowed.has(t.groupId)) return t.team;
+    }
+    return null;
   }
 
   const winnerSlot = slot.match(/^Vencedor M(\d+)$/);

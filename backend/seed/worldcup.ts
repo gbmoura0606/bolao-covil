@@ -160,38 +160,43 @@ const GROUP_MATCHES: GM[] = [
 // ── Knockout matches: [extId, round, num, homeSlot, awaySlot, date, venue] ───
 type KM = [string, string, number, string, string, string, string];
 const KNOCKOUT_MATCHES: KM[] = [
-  ['M49','r32',49,'1º Grupo A','2º Grupo B','2026-07-04','MetLife Stadium, East Rutherford NJ'],
-  ['M50','r32',50,'1º Grupo C','2º Grupo D','2026-07-04','AT&T Stadium, Arlington TX'],
-  ['M51','r32',51,'1º Grupo E','2º Grupo F','2026-07-05','SoFi Stadium, Los Angeles CA'],
-  ['M52','r32',52,'1º Grupo G','2º Grupo H','2026-07-05','Hard Rock Stadium, Miami FL'],
-  ['M53','r32',53,'1º Grupo I','2º Grupo J','2026-07-06','Levi\'s Stadium, Santa Clara CA'],
-  ['M54','r32',54,'1º Grupo K','2º Grupo L','2026-07-06','Gillette Stadium, Foxborough MA'],
-  ['M55','r32',55,'1º Grupo B','3º melhor (1)','2026-07-07','Arrowhead Stadium, Kansas City MO'],
-  ['M56','r32',56,'1º Grupo D','3º melhor (2)','2026-07-07','Camping World Stadium, Orlando FL'],
-  ['M57','r32',57,'1º Grupo F','3º melhor (3)','2026-07-08','Lincoln Financial Field, Filadélfia PA'],
-  ['M58','r32',58,'1º Grupo H','3º melhor (4)','2026-07-08','BC Place, Vancouver CAN'],
-  ['M59','r32',59,'1º Grupo J','3º melhor (5)','2026-07-09','Estadio Azteca, Cidade do México'],
-  ['M60','r32',60,'1º Grupo L','3º melhor (6)','2026-07-09','Estadio Akron, Guadalajara MEX'],
-  ['M61','r32',61,'2º Grupo A','3º melhor (7)','2026-07-10','AT&T Stadium, Arlington TX'],
-  ['M62','r32',62,'2º Grupo C','3º melhor (8)','2026-07-10','MetLife Stadium, East Rutherford NJ'],
-  ['M63','r32',63,'2º Grupo E','2º Grupo G','2026-07-11','SoFi Stadium, Los Angeles CA'],
-  ['M64','r32',64,'2º Grupo I','2º Grupo K','2026-07-11','Hard Rock Stadium, Miami FL'],
-  ['M65','r16',65,'Vencedor M49','Vencedor M50','2026-07-14','MetLife Stadium, East Rutherford NJ'],
-  ['M66','r16',66,'Vencedor M51','Vencedor M52','2026-07-14','AT&T Stadium, Arlington TX'],
-  ['M67','r16',67,'Vencedor M53','Vencedor M54','2026-07-15','SoFi Stadium, Los Angeles CA'],
-  ['M68','r16',68,'Vencedor M55','Vencedor M56','2026-07-15','Hard Rock Stadium, Miami FL'],
-  ['M69','r16',69,'Vencedor M57','Vencedor M58','2026-07-16','Levi\'s Stadium, Santa Clara CA'],
-  ['M70','r16',70,'Vencedor M59','Vencedor M60','2026-07-16','Gillette Stadium, Foxborough MA'],
-  ['M71','r16',71,'Vencedor M61','Vencedor M62','2026-07-17','BC Place, Vancouver CAN'],
-  ['M72','r16',72,'Vencedor M63','Vencedor M64','2026-07-17','Estadio Azteca, Cidade do México'],
-  ['M73','qf',73,'Vencedor M65','Vencedor M66','2026-07-21','MetLife Stadium, East Rutherford NJ'],
-  ['M74','qf',74,'Vencedor M67','Vencedor M68','2026-07-21','AT&T Stadium, Arlington TX'],
-  ['M75','qf',75,'Vencedor M69','Vencedor M70','2026-07-22','SoFi Stadium, Los Angeles CA'],
-  ['M76','qf',76,'Vencedor M71','Vencedor M72','2026-07-22','Hard Rock Stadium, Miami FL'],
-  ['M77','sf',77,'Vencedor M73','Vencedor M74','2026-07-26','MetLife Stadium, East Rutherford NJ'],
-  ['M78','sf',78,'Vencedor M75','Vencedor M76','2026-07-27','AT&T Stadium, Arlington TX'],
-  ['M79','terceiro',79,'Perdedor M77','Perdedor M78','2026-07-30','Hard Rock Stadium, Miami FL'],
-  ['M80','final',80,'Vencedor M77','Vencedor M78','2026-08-02','MetLife Stadium, East Rutherford NJ'],
+  // Rodada de 32 — M73–M88
+  ['M73','r32', 73,'2º Grupo A',              '2º Grupo B',              '2026-07-04','MetLife Stadium, East Rutherford NJ'],
+  ['M74','r32', 74,'1º Grupo E',              'Melhor 3º (A/B/C/D/F)',   '2026-07-04','AT&T Stadium, Arlington TX'],
+  ['M75','r32', 75,'1º Grupo F',              '2º Grupo C',              '2026-07-05','SoFi Stadium, Los Angeles CA'],
+  ['M76','r32', 76,'1º Grupo C',              '2º Grupo F',              '2026-07-05','Hard Rock Stadium, Miami FL'],
+  ['M77','r32', 77,'1º Grupo I',              'Melhor 3º (C/D/F/G/H)',   '2026-07-06','Levi\'s Stadium, Santa Clara CA'],
+  ['M78','r32', 78,'2º Grupo E',              '2º Grupo I',              '2026-07-06','Gillette Stadium, Foxborough MA'],
+  ['M79','r32', 79,'1º Grupo A',              'Melhor 3º (C/E/F/H/I)',   '2026-07-07','Arrowhead Stadium, Kansas City MO'],
+  ['M80','r32', 80,'1º Grupo L',              'Melhor 3º (E/H/I/J/K)',   '2026-07-07','Camping World Stadium, Orlando FL'],
+  ['M81','r32', 81,'1º Grupo D',              'Melhor 3º (B/E/F/I/J)',   '2026-07-08','Lincoln Financial Field, Filadélfia PA'],
+  ['M82','r32', 82,'1º Grupo G',              'Melhor 3º (A/E/H/I/J)',   '2026-07-08','BC Place, Vancouver CAN'],
+  ['M83','r32', 83,'2º Grupo D',              '2º Grupo G',              '2026-07-09','Estadio Azteca, Cidade do México'],
+  ['M84','r32', 84,'1º Grupo B',              'Melhor 3º (D/F/G/H/L)',   '2026-07-09','Estadio Akron, Guadalajara MEX'],
+  ['M85','r32', 85,'1º Grupo J',              'Melhor 3º (A/B/C/G/L)',   '2026-07-10','AT&T Stadium, Arlington TX'],
+  ['M86','r32', 86,'2º Grupo H',              '2º Grupo J',              '2026-07-10','MetLife Stadium, East Rutherford NJ'],
+  ['M87','r32', 87,'1º Grupo H',              '2º Grupo J',              '2026-07-11','SoFi Stadium, Los Angeles CA'],
+  ['M88','r32', 88,'1º Grupo K',              'Melhor 3º (B/C/D/G/L)',   '2026-07-11','Hard Rock Stadium, Miami FL'],
+  // Oitavas de Final — M89–M96
+  ['M89','r16', 89,'Vencedor M73','Vencedor M74','2026-07-14','MetLife Stadium, East Rutherford NJ'],
+  ['M90','r16', 90,'Vencedor M75','Vencedor M76','2026-07-14','AT&T Stadium, Arlington TX'],
+  ['M91','r16', 91,'Vencedor M77','Vencedor M78','2026-07-15','SoFi Stadium, Los Angeles CA'],
+  ['M92','r16', 92,'Vencedor M79','Vencedor M80','2026-07-15','Hard Rock Stadium, Miami FL'],
+  ['M93','r16', 93,'Vencedor M81','Vencedor M82','2026-07-16','Levi\'s Stadium, Santa Clara CA'],
+  ['M94','r16', 94,'Vencedor M83','Vencedor M84','2026-07-16','Gillette Stadium, Foxborough MA'],
+  ['M95','r16', 95,'Vencedor M85','Vencedor M86','2026-07-17','BC Place, Vancouver CAN'],
+  ['M96','r16', 96,'Vencedor M87','Vencedor M88','2026-07-17','Estadio Azteca, Cidade do México'],
+  // Quartas de Final — M97–M100
+  ['M97','qf', 97,'Vencedor M89','Vencedor M90','2026-07-21','MetLife Stadium, East Rutherford NJ'],
+  ['M98','qf', 98,'Vencedor M91','Vencedor M92','2026-07-21','AT&T Stadium, Arlington TX'],
+  ['M99','qf', 99,'Vencedor M93','Vencedor M94','2026-07-22','SoFi Stadium, Los Angeles CA'],
+  ['M100','qf',100,'Vencedor M95','Vencedor M96','2026-07-22','Hard Rock Stadium, Miami FL'],
+  // Semifinais — M101–M102
+  ['M101','sf',101,'Vencedor M97', 'Vencedor M98', '2026-07-26','MetLife Stadium, East Rutherford NJ'],
+  ['M102','sf',102,'Vencedor M99', 'Vencedor M100','2026-07-27','AT&T Stadium, Arlington TX'],
+  // 3º Lugar e Final
+  ['M103','terceiro',103,'Perdedor M101','Perdedor M102','2026-07-30','Hard Rock Stadium, Miami FL'],
+  ['M104','final',  104,'Vencedor M101','Vencedor M102','2026-08-02','MetLife Stadium, East Rutherford NJ'],
 ];
 
 export async function seedWorldCup(): Promise<void> {
@@ -234,7 +239,13 @@ export async function seedWorldCup(): Promise<void> {
     });
   }
 
-  // 3. Upsert knockout matches
+  // 3. Remove knockout matches that are no longer in the seed (old numbering M49-M80)
+  const validKnockoutIds = KNOCKOUT_MATCHES.map(([extId]) => extId);
+  await prisma.match.deleteMany({
+    where: { group: null, externalId: { not: null, notIn: validKnockoutIds } },
+  });
+
+  // 4. Upsert knockout matches
   for (const [extId, round, , homeSlot, awaySlot, date, venue] of KNOCKOUT_MATCHES) {
     await prisma.match.upsert({
       where: { externalId: extId },
