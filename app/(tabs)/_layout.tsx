@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSizes } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -25,7 +24,6 @@ const TABS: TabConfig[] = [
 export default function TabsLayout(): React.JSX.Element {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   React.useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -49,8 +47,7 @@ export default function TabsLayout(): React.JSX.Element {
           backgroundColor: Colors.tabBarBackground,
           borderTopColor: Colors.border,
           borderTopWidth: 1,
-          height: 60 + insets.bottom,
-          paddingBottom: 8 + insets.bottom,
+          paddingBottom: 8,
           paddingTop: 6,
         },
         tabBarActiveTintColor: Colors.tabBarActiveTint,

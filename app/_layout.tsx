@@ -10,8 +10,6 @@ export default function RootLayout(): React.JSX.Element {
       <Head>
         <title>Bolão Covil</title>
         <meta name="description" content="Bolão Copa do Mundo 2026" />
-        {/* viewport-fit=cover expõe safe-area-inset-* no Safari/Chrome mobile */}
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         {/* SVG emoji favicon — type=image/svg+xml takes priority over Expo's favicon.ico */}
         <link
           rel="icon"
