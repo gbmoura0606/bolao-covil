@@ -14,10 +14,14 @@ function PredRow({
   item,
   isMe,
   isFinished,
+  liveHomeScore,
+  liveAwayScore,
 }: {
   item: GroupPrediction;
   isMe: boolean;
   isFinished: boolean;
+  liveHomeScore?: number | null;
+  liveAwayScore?: number | null;
 }): React.JSX.Element {
   const pts = item.points;
   const ptColor =
@@ -27,13 +31,20 @@ function PredRow({
     : pts >= 1   ? Colors.success
     : Colors.textSecondary;
 
+  // Exact score is impossible if the live score already exceeded either prediction value
+  const isDead =
+    !isFinished &&
+    liveHomeScore != null &&
+    liveAwayScore != null &&
+    (item.homeScore < liveHomeScore || item.awayScore < liveAwayScore);
+
   return (
     <View style={[rowS.row, isMe && rowS.rowMe]}>
-      <Text style={[rowS.name, isMe && rowS.nameMe]} numberOfLines={1}>
+      <Text style={[rowS.name, isMe && rowS.nameMe, isDead && rowS.nameDead]} numberOfLines={1}>
         {item.nickname}
-        {isMe && <Text style={rowS.you}> (você)</Text>}
+        {isMe && <Text style={[rowS.you, isDead && rowS.nameDead]}> (você)</Text>}
       </Text>
-      <Text style={rowS.score}>
+      <Text style={[rowS.score, isDead && rowS.scoreDead]}>
         {item.homeScore} × {item.awayScore}
       </Text>
       {isFinished && pts !== null && (
@@ -62,6 +73,7 @@ const rowS = StyleSheet.create({
     fontWeight: FontWeights.medium,
   },
   nameMe: { color: Colors.accentGold, fontWeight: FontWeights.bold },
+  nameDead: { opacity: 0.45 },
   you: { fontSize: 10, fontWeight: FontWeights.medium, color: Colors.accentGold },
   score: {
     fontSize: FontSizes.xs,
@@ -69,6 +81,11 @@ const rowS = StyleSheet.create({
     color: Colors.textPrimary,
     minWidth: 44,
     textAlign: 'center',
+  },
+  scoreDead: {
+    color: Colors.error,
+    opacity: 0.55,
+    textDecorationLine: 'line-through',
   },
   pts: {
     fontSize: FontSizes.xs,
@@ -82,9 +99,11 @@ interface Props {
   matchId: string;
   currentUserId: string | undefined;
   isFinished: boolean;
+  liveHomeScore?: number | null;
+  liveAwayScore?: number | null;
 }
 
-export function GroupPredictionsPanel({ matchId, currentUserId, isFinished }: Props): React.JSX.Element {
+export function GroupPredictionsPanel({ matchId, currentUserId, isFinished, liveHomeScore, liveAwayScore }: Props): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<GroupPrediction[] | null>(null);
@@ -149,6 +168,8 @@ export function GroupPredictionsPanel({ matchId, currentUserId, isFinished }: Pr
                   item={item}
                   isMe={item.userId === currentUserId}
                   isFinished={isFinished}
+                  liveHomeScore={liveHomeScore}
+                  liveAwayScore={liveAwayScore}
                 />
               ))}
             </>

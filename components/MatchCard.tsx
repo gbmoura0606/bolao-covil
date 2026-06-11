@@ -82,6 +82,15 @@ export function MatchCard({ match, prediction, onUpdateScore, onRetry, currentUs
     return getPointsInfo(pH, pA, rH, rA);
   })();
 
+  const isExactDead =
+    isLive &&
+    hasPrediction &&
+    prediction?.persistedHomeScore !== undefined &&
+    prediction?.persistedAwayScore !== undefined &&
+    match.homeScore != null &&
+    match.awayScore != null &&
+    (prediction.persistedHomeScore < match.homeScore || prediction.persistedAwayScore < match.awayScore);
+
   return (
     <View style={[styles.card, isLive && styles.cardLive]}>
 
@@ -204,8 +213,9 @@ export function MatchCard({ match, prediction, onUpdateScore, onRetry, currentUs
               prediction?.persistedHomeScore !== undefined &&
               prediction?.persistedAwayScore !== undefined ? (
               <>
-                <Text style={styles.predStatic}>
-                  Palpite: {prediction.persistedHomeScore} × {prediction.persistedAwayScore}
+                <Text style={styles.predStaticLabel}>Palpite: </Text>
+                <Text style={[styles.predStaticScore, isExactDead && styles.predScoreDead]}>
+                  {prediction.persistedHomeScore} × {prediction.persistedAwayScore}
                 </Text>
                 {isLive && (
                   <View style={styles.lockChip}>
@@ -238,6 +248,8 @@ export function MatchCard({ match, prediction, onUpdateScore, onRetry, currentUs
           matchId={match.id}
           currentUserId={currentUserId}
           isFinished={isFinished}
+          liveHomeScore={isLive ? match.homeScore : undefined}
+          liveAwayScore={isLive ? match.awayScore : undefined}
         />
       )}
 
@@ -363,10 +375,20 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.sm,
   },
-  predStatic: {
+  predStaticLabel: {
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+    fontWeight: FontWeights.medium,
+  },
+  predStaticScore: {
     fontSize: FontSizes.sm,
     color: Colors.textPrimary,
     fontWeight: FontWeights.semibold,
+  },
+  predScoreDead: {
+    color: Colors.error,
+    opacity: 0.6,
+    textDecorationLine: 'line-through',
   },
   lockChip: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   lockText: { fontSize: 11, color: Colors.textSecondary },
