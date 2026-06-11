@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { getRanking } from '@/services/ranking';
@@ -16,6 +16,7 @@ export function RankingWidget({ refreshKey = 0 }: RankingWidgetProps): React.JSX
   const { user } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -34,17 +35,22 @@ export function RankingWidget({ refreshKey = 0 }: RankingWidgetProps): React.JSX
 
   if (isLoading) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="small" color={Colors.accentGold} />
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Ionicons name="trophy-outline" size={13} color={Colors.accentGold} />
+          <Text style={styles.headerTitle}>Ranking Parcial</Text>
+          <ActivityIndicator size="small" color={Colors.accentGold} style={styles.loadingIndicator} />
+        </View>
       </View>
     );
   }
+
   if (players.length === 0) return <View />;
 
   const myIdx = players.findIndex((p) => p.id === user?.id);
   const inTop3 = myIdx >= 0 && myIdx <= 2;
+  const myPlayer = myIdx >= 0 ? players[myIdx] : null;
 
-  // Rows: always 1st + 2nd, then 3rd if user is top-3, else user's own row
   const top2 = players.slice(0, Math.min(2, players.length));
   const thirdRow = inTop3
     ? (players[2] ?? null)
@@ -66,37 +72,55 @@ export function RankingWidget({ refreshKey = 0 }: RankingWidgetProps): React.JSX
     );
   }
 
+  const rankLabel = myPlayer
+    ? (myIdx < 3 ? MEDAL[myIdx] : `#${myIdx + 1}`)
+    : null;
+
+  const webStyle = Platform.OS === 'web' ? styles.webCursor : undefined;
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <TouchableOpacity
+        style={[styles.header, webStyle]}
+        onPress={() => setExpanded((v) => !v)}
+        activeOpacity={0.75}
+      >
         <Ionicons name="trophy-outline" size={13} color={Colors.accentGold} />
         <Text style={styles.headerTitle}>Ranking Parcial</Text>
-      </View>
 
-      {top2.map((p, i) => renderRow(p, i))}
+        {!expanded && myPlayer && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeRank}>{rankLabel}</Text>
+            <Text style={styles.badgePts}>{myPlayer.points} pts</Text>
+          </View>
+        )}
 
-      {showEllipsis && (
-        <View style={styles.ellipsisRow}>
-          <Text style={styles.ellipsisTxt}>·  ·  ·</Text>
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={14}
+          color={Colors.textSecondary}
+          style={styles.chevron}
+        />
+      </TouchableOpacity>
+
+      {expanded && (
+        <View>
+          {top2.map((p, i) => renderRow(p, i))}
+
+          {showEllipsis && (
+            <View style={styles.ellipsisRow}>
+              <Text style={styles.ellipsisTxt}>·  ·  ·</Text>
+            </View>
+          )}
+
+          {thirdRow !== null && renderRow(thirdRow, inTop3 ? 2 : myIdx)}
         </View>
       )}
-
-      {thirdRow !== null && renderRow(thirdRow, inTop3 ? 2 : myIdx)}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  loading: {
-    paddingVertical: Spacing.sm,
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.sm,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
   container: {
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.sm,
@@ -113,21 +137,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     backgroundColor: Colors.backgroundAlt,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
   headerTitle: {
     fontSize: FontSizes.sm,
     fontWeight: FontWeights.semibold,
     color: Colors.textPrimary,
+    flex: 1,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginRight: 4,
+  },
+  badgeRank: {
+    fontSize: FontSizes.sm,
+    color: Colors.accentGold,
+    fontWeight: FontWeights.bold,
+  },
+  badgePts: {
+    fontSize: FontSizes.xs,
+    color: Colors.accentGold,
+    fontWeight: FontWeights.medium,
+  },
+  chevron: {
+    marginLeft: 2,
+  },
+  loadingIndicator: {
+    marginLeft: 4,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(55,65,81,0.3)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(55,65,81,0.3)',
   },
   rowMe: { backgroundColor: 'rgba(245,158,11,0.07)' },
   rankTxt: { width: 36, fontSize: 13, color: Colors.textSecondary, textAlign: 'center' },
@@ -143,4 +192,5 @@ const styles = StyleSheet.create({
   ptsTxtMe: { color: Colors.accentGold, fontWeight: FontWeights.bold },
   ellipsisRow: { paddingVertical: 3, alignItems: 'center' },
   ellipsisTxt: { fontSize: 11, color: Colors.border, letterSpacing: 4 },
+  webCursor: { cursor: 'pointer' } as object,
 });
