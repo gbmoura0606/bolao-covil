@@ -1,12 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  ScrollView,
-} from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { getRanking } from '@/services/ranking';
@@ -21,28 +14,23 @@ const MEDAL = ['🥇', '🥈', '🥉'];
 
 export function RankingWidget({ refreshKey = 0 }: RankingWidgetProps): React.JSX.Element {
   const { user } = useAuth();
-  const [players, setPlayers] = useState<(Player & { isCurrentUser: boolean })[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [expanded, setExpanded] = useState(false);
 
   const load = useCallback(async (): Promise<void> => {
     try {
       const data = await getRanking();
-      setPlayers(data.map((p) => ({ ...p, isCurrentUser: p.id === user?.id })));
+      setPlayers(data);
     } catch {
-      // Ranking failure is non-critical
+      // non-critical
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load, refreshKey]);
-
-  const myIdx = players.findIndex((p) => p.isCurrentUser);
-  const myPlayer = myIdx !== -1 ? players[myIdx] : null;
-  const displayPlayers = players.slice(0, expanded ? 20 : 5);
 
   if (isLoading) {
     return (
@@ -53,74 +41,47 @@ export function RankingWidget({ refreshKey = 0 }: RankingWidgetProps): React.JSX
   }
   if (players.length === 0) return <View />;
 
+  const myIdx = players.findIndex((p) => p.id === user?.id);
+  const inTop3 = myIdx >= 0 && myIdx <= 2;
+
+  // Rows: always 1st + 2nd, then 3rd if user is top-3, else user's own row
+  const top2 = players.slice(0, Math.min(2, players.length));
+  const thirdRow = inTop3
+    ? (players[2] ?? null)
+    : (myIdx >= 0 ? players[myIdx] : (players[2] ?? null));
+  const showEllipsis = !inTop3 && myIdx > 2;
+
+  function renderRow(p: Player, rank: number): React.JSX.Element {
+    const isMe = p.id === user?.id;
+    return (
+      <View key={p.id} style={[styles.row, isMe && styles.rowMe]}>
+        <Text style={[styles.rankTxt, rank < 3 && styles.rankMedal]}>
+          {rank < 3 ? MEDAL[rank] : `#${rank + 1}`}
+        </Text>
+        <Text style={[styles.nameTxt, isMe && styles.nameTxtMe]} numberOfLines={1}>
+          {p.name}
+        </Text>
+        <Text style={[styles.ptsTxt, isMe && styles.ptsTxtMe]}>{p.points} pts</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {/* Header — sempre visível, tap para expandir */}
-      <TouchableOpacity style={styles.header} onPress={() => setExpanded((e) => !e)} activeOpacity={0.8}>
-        <View style={styles.headerLeft}>
-          <Ionicons name="trophy-outline" size={14} color={Colors.accentGold} />
-          <Text style={styles.headerTitle}>Ranking Parcial</Text>
+      <View style={styles.header}>
+        <Ionicons name="trophy-outline" size={13} color={Colors.accentGold} />
+        <Text style={styles.headerTitle}>Ranking Parcial</Text>
+      </View>
+
+      {top2.map((p, i) => renderRow(p, i))}
+
+      {showEllipsis && (
+        <View style={styles.ellipsisRow}>
+          <Text style={styles.ellipsisTxt}>·  ·  ·</Text>
         </View>
-        <View style={styles.headerRight}>
-          {myPlayer !== null && (
-            <View style={styles.myChip}>
-              <Text style={styles.myChipText}>
-                #{myIdx + 1} · {myPlayer.points} pts
-              </Text>
-            </View>
-          )}
-          <Ionicons
-            name={expanded ? 'chevron-up' : 'chevron-down'}
-            size={14}
-            color={Colors.textSecondary}
-          />
-        </View>
-      </TouchableOpacity>
-
-      {expanded && (
-        <ScrollView scrollEnabled={false} style={styles.table}>
-          {/* Header columns */}
-          <View style={styles.tableHeader}>
-            <Text style={[styles.hCol, styles.rankCol]}>#</Text>
-            <Text style={[styles.hCol, styles.nameCol]}>Jogador</Text>
-            <Text style={[styles.hCol, styles.numCol]}>Pts</Text>
-            <Text style={[styles.hCol, styles.numCol]}>Exatos</Text>
-          </View>
-
-          {displayPlayers.map((p, i) => (
-            <View key={p.id} style={[styles.row, p.isCurrentUser && styles.rowMe]}>
-              <Text style={[styles.rankTxt, i < 3 && styles.rankTop]}>
-                {i < 3 ? MEDAL[i] : String(i + 1)}
-              </Text>
-              <Text
-                style={[styles.nameTxt, p.isCurrentUser && styles.nameTxtMe]}
-                numberOfLines={1}
-              >
-                {p.name}
-              </Text>
-              <Text style={[styles.numTxt, p.isCurrentUser && styles.numTxtMe]}>{p.points}</Text>
-              <Text style={styles.numTxt}>{p.exactMatches}✓</Text>
-            </View>
-          ))}
-
-          {/* Se o usuário não está no top 5, mostra separador + posição dele */}
-          {myIdx >= 5 && myPlayer !== null && (
-            <>
-              <View style={styles.ellipsisRow}>
-                <Text style={styles.ellipsisTxt}>·  ·  ·</Text>
-              </View>
-              <View style={[styles.row, styles.rowMe]}>
-                <Text style={styles.rankTxt}>#{myIdx + 1}</Text>
-                <Text style={[styles.nameTxt, styles.nameTxtMe]} numberOfLines={1}>
-                  {myPlayer.name}
-                </Text>
-                <Text style={[styles.numTxt, styles.numTxtMe]}>{myPlayer.points}</Text>
-                <Text style={styles.numTxt}>{myPlayer.exactMatches}✓</Text>
-              </View>
-            </>
-          )}
-        </ScrollView>
       )}
+
+      {thirdRow !== null && renderRow(thirdRow, inTop3 ? 2 : myIdx)}
     </View>
   );
 }
@@ -147,62 +108,30 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.xs,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     backgroundColor: Colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   headerTitle: {
     fontSize: FontSizes.sm,
     fontWeight: FontWeights.semibold,
     color: Colors.textPrimary,
   },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  myChip: {
-    backgroundColor: 'rgba(245,158,11,0.15)',
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(245,158,11,0.3)',
-  },
-  myChipText: {
-    fontSize: 11,
-    fontWeight: FontWeights.bold,
-    color: Colors.accentGold,
-  },
-  table: { maxHeight: 300 },
-  tableHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
-    backgroundColor: '#1a2030',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  hCol: {
-    fontSize: 10,
-    fontWeight: FontWeights.semibold,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-  },
-  rankCol: { width: 36, textAlign: 'center' },
-  nameCol: { flex: 1 },
-  numCol: { width: 44, textAlign: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 7,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(55,65,81,0.4)',
+    borderBottomColor: 'rgba(55,65,81,0.3)',
   },
   rowMe: { backgroundColor: 'rgba(245,158,11,0.07)' },
   rankTxt: { width: 36, fontSize: 13, color: Colors.textSecondary, textAlign: 'center' },
-  rankTop: { color: Colors.textPrimary },
+  rankMedal: { color: Colors.textPrimary },
   nameTxt: {
     flex: 1,
     fontSize: FontSizes.sm,
@@ -210,8 +139,8 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   nameTxtMe: { color: Colors.accentGold, fontWeight: FontWeights.bold },
-  numTxt: { width: 44, fontSize: FontSizes.sm, color: Colors.textSecondary, textAlign: 'center' },
-  numTxtMe: { color: Colors.accentGold, fontWeight: FontWeights.bold },
-  ellipsisRow: { paddingVertical: 4, alignItems: 'center' },
-  ellipsisTxt: { fontSize: 12, color: Colors.border, letterSpacing: 4 },
+  ptsTxt: { fontSize: FontSizes.sm, color: Colors.textSecondary, fontWeight: FontWeights.medium },
+  ptsTxtMe: { color: Colors.accentGold, fontWeight: FontWeights.bold },
+  ellipsisRow: { paddingVertical: 3, alignItems: 'center' },
+  ellipsisTxt: { fontSize: 11, color: Colors.border, letterSpacing: 4 },
 });
