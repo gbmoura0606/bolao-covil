@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <clipPath id="ball-clip">
+      <circle cx="16" cy="16" r="14.5"/>
+    </clipPath>
+  </defs>
+  <!-- Ball background -->
+  <circle cx="16" cy="16" r="14.5" fill="#f8f8f8" stroke="#1a1a1a" stroke-width="1.5"/>
+  <!-- Black patches -->
+  <g fill="#1a1a1a" clip-path="url(#ball-clip)">
+    <!-- Center pentagon -->
+    <polygon points="16,10.2 19.8,12.9 18.4,17.3 13.6,17.3 12.2,12.9"/>
+    <!-- Top -->
+    <polygon points="16,3 18.6,7.2 16,10.2 13.4,7.2"/>
+    <!-- Upper-right -->
+    <polygon points="26,9 26.5,13.5 22.4,14.5 19.8,12.9 23,8.5"/>
+    <!-- Lower-right -->
+    <polygon points="25,22 21.5,26.5 18.5,23 18.4,17.3 23,17.5"/>
+    <!-- Bottom -->
+    <polygon points="13.6,17.3 18.4,17.3 18.5,23 16,28.5 13.5,23"/>
+    <!-- Lower-left -->
+    <polygon points="7,22 10.5,17.5 13.6,17.3 13.5,23 10.5,26.5"/>
+    <!-- Upper-left -->
+    <polygon points="6,9 9,8.5 12.2,12.9 9.6,14.5 5.5,13.5"/>
+  </g>
+</svg>
