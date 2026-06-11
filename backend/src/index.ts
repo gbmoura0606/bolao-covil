@@ -9,6 +9,7 @@ import predictionRoutes from '../routes/predictions';
 import rankingRoutes from '../routes/ranking';
 import leagueRoutes from '../routes/leagues';
 import standingsRoutes from '../routes/standings';
+import { PrismaClient } from '@prisma/client';
 
 dotenv.config();
 
@@ -84,10 +85,43 @@ async function recalculateFinishedPoints(): Promise<void> {
   }
 }
 
+const COVIL_LEAGUE_CODE = 'COVILCVL';
+
+async function seedDefaultLeague(): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    const du = await prisma.user.findFirst({ where: { nickname: 'Du' } });
+    if (!du) return;
+
+    let league = await prisma.league.findUnique({ where: { code: COVIL_LEAGUE_CODE } });
+    if (!league) {
+      league = await prisma.league.create({
+        data: { name: 'Covil da Liga', code: COVIL_LEAGUE_CODE, ownerId: du.id },
+      });
+      console.log('[seed] Liga "Covil da Liga" criada.');
+    }
+
+    const allUsers = await prisma.user.findMany({ select: { id: true } });
+    let added = 0;
+    for (const user of allUsers) {
+      const entry = await prisma.userLeague.upsert({
+        where: { userId_leagueId: { userId: user.id, leagueId: league.id } },
+        update: {},
+        create: { userId: user.id, leagueId: league.id },
+      });
+      if (entry) added++;
+    }
+    console.log(`[seed] "Covil da Liga": ${allUsers.length} usuários garantidos.`);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 async function start(): Promise<void> {
   await runMigrations();
   await seedUsers();
   await seedWorldCup();
+  await seedDefaultLeague();
   await recalculateFinishedPoints();
   app.listen(PORT, () => {
     console.log(`Bolão Covil API running on port ${PORT}`);

@@ -186,6 +186,13 @@ export async function createUser(req: AuthenticatedRequest, res: Response): Prom
     const user = await prisma.user.create({
       data: { nickname: clean, passwordHash, mustChangePassword: true, canAccessGerencia: false },
     });
+
+    // Auto-enroll in the default "Covil da Liga"
+    const covilLeague = await prisma.league.findUnique({ where: { code: 'COVILCVL' } });
+    if (covilLeague) {
+      await prisma.userLeague.create({ data: { userId: user.id, leagueId: covilLeague.id } });
+    }
+
     console.log(`[admin] ${req.userNickname} criou usuário "${clean}"`);
     res.status(201).json({ id: user.id, nickname: user.nickname });
   } catch {
