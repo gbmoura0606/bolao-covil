@@ -3,7 +3,8 @@ import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSizes } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -24,6 +25,10 @@ const TABS: TabConfig[] = [
 export default function TabsLayout(): React.JSX.Element {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  // On web the browser reserves space for the home indicator automatically;
+  // on native we must account for it manually.
+  const bottomInset = Platform.OS === 'web' ? 0 : insets.bottom;
 
   React.useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -47,7 +52,8 @@ export default function TabsLayout(): React.JSX.Element {
           backgroundColor: Colors.tabBarBackground,
           borderTopColor: Colors.border,
           borderTopWidth: 1,
-          paddingBottom: 8,
+          height: 60 + bottomInset,
+          paddingBottom: 8 + bottomInset,
           paddingTop: 6,
         },
         tabBarActiveTintColor: Colors.tabBarActiveTint,
