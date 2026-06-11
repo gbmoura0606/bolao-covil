@@ -15,7 +15,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/favicon.svg",
+      "favicon": "./assets/favicon.png",
       "name": "Bolão Covil",
       "themeColor": "#0D0D0D"
     },

@@ -2,10 +2,15 @@ import React from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '@/constants/theme';
+import Head from 'expo-router/head';
 
 export default function RootLayout(): React.JSX.Element {
   return (
     <>
+      <Head>
+        <title>Bolão Covil</title>
+        <meta name="description" content="Bolão Copa do Mundo 2026" />
+      </Head>
       <StatusBar style="light" backgroundColor={Colors.background} />
       <Stack
         screenOptions={{

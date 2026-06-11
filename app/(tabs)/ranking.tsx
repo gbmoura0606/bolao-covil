@@ -241,13 +241,12 @@ const IS_WIDE = SCREEN_W >= 700;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Phase = 'criterios' | 'terceiros' | 'grupos' | 'matamata';
-const PHASES: Phase[] = ['criterios', 'terceiros', 'grupos', 'matamata'];
+type Phase = 'criterios' | 'terceiros' | 'grupos';
+const PHASES: Phase[] = ['criterios', 'terceiros', 'grupos'];
 const PHASE_LABEL: Record<Phase, string> = {
   criterios: 'Critérios',
   terceiros: '3os Lugares',
   grupos: 'Fase de Grupos',
-  matamata: 'Mata-Mata',
 };
 
 type KnockoutRound = 'r32' | 'r16' | 'qf' | 'sf' | 'final' | 'terceiro';
@@ -852,7 +851,6 @@ export default function TabelasScreen(): React.JSX.Element {
             {phase === 'grupos'    && <FaseDeGrupos groups={data.groups} thirds={data.thirds} isAdmin={canAccessGerencia} onMatchSaved={handleMatchSaved} />}
             {phase === 'terceiros' && <TerceirosColocados thirds={data.thirds} />}
             {phase === 'criterios' && <CriteriosView overall={data.overall} />}
-            {phase === 'matamata'  && <MataMataView bracket={data.bracket} />}
           </>
         ) : null}
       </View>
