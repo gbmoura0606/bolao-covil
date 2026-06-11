@@ -93,8 +93,8 @@ export async function updateMatchScore(req: AuthenticatedRequest, res: Response)
       include: matchInclude,
     });
 
-    // Recalculate all prediction points when match reaches FINISHED status
-    if (status === 'FINISHED' && match.homeScore !== null && match.awayScore !== null) {
+    // Recalculate points on every score update for non-open matches (live or finished)
+    if (match.status !== 'OPEN' && match.homeScore !== null && match.awayScore !== null) {
       const predictions = await prisma.prediction.findMany({ where: { matchId: id } });
       await Promise.all(
         predictions.map((p) =>
