@@ -159,6 +159,40 @@ export async function resetUserPassword(req: AuthenticatedRequest, res: Response
   }
 }
 
+export async function createUser(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { nickname } = req.body as { nickname?: string };
+
+  if (!nickname || nickname.trim().length < 2) {
+    res.status(400).json({ error: 'Nickname deve ter pelo menos 2 caracteres.' });
+    return;
+  }
+
+  const clean = nickname.trim();
+  if (!/^[A-Za-zÀ-ÿ0-9_-]+$/.test(clean)) {
+    res.status(400).json({ error: 'Nickname só pode conter letras, números, _ e -.' });
+    return;
+  }
+
+  try {
+    const existing = await prisma.user.findFirst({
+      where: { nickname: { equals: clean, mode: 'insensitive' } },
+    });
+    if (existing) {
+      res.status(409).json({ error: `Já existe um usuário com o nickname "${clean}".` });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+    const user = await prisma.user.create({
+      data: { nickname: clean, passwordHash, mustChangePassword: true, canAccessGerencia: false },
+    });
+    console.log(`[admin] ${req.userNickname} criou usuário "${clean}"`);
+    res.status(201).json({ id: user.id, nickname: user.nickname });
+  } catch {
+    res.status(500).json({ error: 'Erro ao criar usuário.' });
+  }
+}
+
 export async function getMe(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.userId } });

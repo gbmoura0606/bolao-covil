@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { CreateUserModal } from '@/components/CreateUserModal';
 import { Colors, FontSizes, FontWeights, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -29,6 +30,7 @@ function getInitials(nickname: string): string {
 export default function ConfiguracoesScreen(): React.JSX.Element {
   const { user, logout, canAccessGerencia } = useAuth();
   const router = useRouter();
+  const [createUserVisible, setCreateUserVisible] = useState(false);
 
   // Sem Alert.alert: diálogos multi-botão não funcionam no react-native-web,
   // o que deixava o botão Sair sem efeito no navegador.
@@ -45,12 +47,20 @@ export default function ConfiguracoesScreen(): React.JSX.Element {
       onPress: () => router.push('/change-password'),
     },
     ...(canAccessGerencia
-      ? [{
-          id: 'users',
-          label: 'Usuários do Bolão',
-          icon: 'people-outline' as IoniconName,
-          onPress: () => router.push('/gerencia/usuarios'),
-        }]
+      ? [
+          {
+            id: 'users',
+            label: 'Usuários do Bolão',
+            icon: 'people-outline' as IoniconName,
+            onPress: () => router.push('/gerencia/usuarios'),
+          },
+          {
+            id: 'newUser',
+            label: 'Novo Usuário',
+            icon: 'person-add-outline' as IoniconName,
+            onPress: () => setCreateUserVisible(true),
+          },
+        ]
       : []),
     {
       id: 'logout',
@@ -122,6 +132,15 @@ export default function ConfiguracoesScreen(): React.JSX.Element {
 
         <Text style={styles.versionText}>Bolão Covil v1.0.0{'\n'}Copa do Mundo 2026</Text>
       </ScrollView>
+
+      <CreateUserModal
+        visible={createUserVisible}
+        onClose={() => setCreateUserVisible(false)}
+        onCreated={(nickname) => {
+          setCreateUserVisible(false);
+          router.push('/gerencia/usuarios');
+        }}
+      />
     </View>
   );
 }

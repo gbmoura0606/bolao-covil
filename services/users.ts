@@ -15,6 +15,11 @@ export async function getUsersStatus(): Promise<UserStatus[]> {
   return response.data;
 }
 
+export async function createUser(nickname: string): Promise<{ id: string; nickname: string }> {
+  const response = await api.post<{ id: string; nickname: string }>('/api/auth/users', { nickname });
+  return response.data;
+}
+
 /** Volta a senha do usuário para a padrão ('123') e força troca no próximo login. */
 export async function resetUserPassword(userId: string): Promise<{ nickname: string }> {
   const response = await api.post<{ success: boolean; nickname: string }>(
