@@ -239,13 +239,7 @@ export async function seedWorldCup(): Promise<void> {
     });
   }
 
-  // 3. Remove knockout matches that are no longer in the seed (old numbering M49-M80)
-  const validKnockoutIds = KNOCKOUT_MATCHES.map(([extId]) => extId);
-  await prisma.match.deleteMany({
-    where: { group: null, externalId: { not: null, notIn: validKnockoutIds } },
-  });
-
-  // 4. Upsert knockout matches
+  // 3. Upsert knockout matches
   for (const [extId, round, , homeSlot, awaySlot, date, time, venue] of KNOCKOUT_MATCHES) {
     await prisma.match.upsert({
       where: { externalId: extId },
