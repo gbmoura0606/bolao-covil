@@ -21,6 +21,7 @@ export interface MatchCardProps {
   onUpdateScore: (team: 'home' | 'away', value: string) => void;
   onRetry: () => void;
   currentUserId?: string;
+  refreshKey?: number;
 }
 
 const ROUND_LABEL: Record<string, string> = {
@@ -59,7 +60,7 @@ function hasMatchStarted(match: Match): boolean {
   return new Date().getTime() >= new Date(`${match.matchDate}T${match.matchTime}:00`).getTime();
 }
 
-export function MatchCard({ match, prediction, onUpdateScore, onRetry, currentUserId }: MatchCardProps): React.JSX.Element {
+export function MatchCard({ match, prediction, onUpdateScore, onRetry, currentUserId, refreshKey }: MatchCardProps): React.JSX.Element {
   const awayInputRef = useRef<TextInput>(null);
 
   const started = hasMatchStarted(match);
@@ -250,6 +251,7 @@ export function MatchCard({ match, prediction, onUpdateScore, onRetry, currentUs
           isFinished={isFinished}
           liveHomeScore={isLive ? match.homeScore : undefined}
           liveAwayScore={isLive ? match.awayScore : undefined}
+          refreshKey={refreshKey}
         />
       )}
 

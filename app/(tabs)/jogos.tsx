@@ -43,14 +43,14 @@ function formatSectionDate(isoDate: string): string {
   return `${WEEKDAYS[date.getDay()]}, ${d} ${MONTHS[m - 1]}`;
 }
 
-function buildSections(matches: Match[]): MatchSection[] {
+function buildSections(matches: Match[], reverse = false): MatchSection[] {
   const byDate = new Map<string, Match[]>();
   for (const m of matches) {
     if (!byDate.has(m.matchDate)) byDate.set(m.matchDate, []);
     byDate.get(m.matchDate)!.push(m);
   }
   return Array.from(byDate.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => reverse ? b.localeCompare(a) : a.localeCompare(b))
     .map(([date, data]) => ({ title: formatSectionDate(date), data }));
 }
 
@@ -231,7 +231,7 @@ export default function JogosScreen(): React.JSX.Element {
       if (activeTab === 'live')     return m.status === 'CLOSED';
       return m.status === 'FINISHED';
     });
-    return buildSections(filtered);
+    return buildSections(filtered, activeTab === 'finished');
   }, [matches, activeTab]);
 
   // ─── Render ──────────────────────────────────────────────────────────────
@@ -288,6 +288,7 @@ export default function JogosScreen(): React.JSX.Element {
               onUpdateScore={(team, value) => updateScore(item.id, team, value)}
               onRetry={() => retryPrediction(item.id)}
               currentUserId={user?.id}
+              refreshKey={rankingKey}
             />
           )}
           renderSectionHeader={({ section }: { section: SectionListData<Match, MatchSection> }) => (

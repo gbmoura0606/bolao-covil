@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -101,9 +101,10 @@ interface Props {
   isFinished: boolean;
   liveHomeScore?: number | null;
   liveAwayScore?: number | null;
+  refreshKey?: number;
 }
 
-export function GroupPredictionsPanel({ matchId, currentUserId, isFinished, liveHomeScore, liveAwayScore }: Props): React.JSX.Element {
+export function GroupPredictionsPanel({ matchId, currentUserId, isFinished, liveHomeScore, liveAwayScore, refreshKey }: Props): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<GroupPrediction[] | null>(null);
@@ -121,6 +122,12 @@ export function GroupPredictionsPanel({ matchId, currentUserId, isFinished, live
       setLoading(false);
     }
   }, [matchId]);
+
+  // Reload when live match polling updates score (refreshKey changes)
+  useEffect(() => {
+    if (open) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   function toggle(): void {
     if (!open && data === null) void load();
