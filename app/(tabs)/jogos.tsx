@@ -51,7 +51,14 @@ function buildSections(matches: Match[], reverse = false): MatchSection[] {
   }
   return Array.from(byDate.entries())
     .sort(([a], [b]) => reverse ? b.localeCompare(a) : a.localeCompare(b))
-    .map(([date, data]) => ({ title: formatSectionDate(date), data }));
+    .map(([date, data]) => ({
+      title: formatSectionDate(date),
+      // Dentro do dia, ordena por horário de início (desc em Resultados, asc nas demais)
+      data: data.slice().sort((x, y) =>
+        reverse
+          ? (y.matchTime ?? '').localeCompare(x.matchTime ?? '')
+          : (x.matchTime ?? '').localeCompare(y.matchTime ?? '')),
+    }));
 }
 
 // ─── Componentes auxiliares ───────────────────────────────────────────────────

@@ -19,7 +19,7 @@ export default function LandingScreen(): React.JSX.Element {
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>COVIL DA MIGA</Text>
-        <Text style={styles.headerSub}>Selecione o acesso desejado</Text>
+        <Text style={styles.headerSub}>Bolão da Copa do Mundo 2026</Text>
       </View>
 
       <View style={styles.cardsContainer}>
@@ -49,34 +49,6 @@ export default function LandingScreen(): React.JSX.Element {
           </View>
 
           <View style={styles.bolaoAccent} />
-        </TouchableOpacity>
-
-        {/* Gerência do Setor */}
-        <TouchableOpacity
-          style={styles.gerenciaCard}
-          onPress={() => router.push('/login-gerencia')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.cardInner}>
-            <View style={styles.gerenciaIconWrap}>
-              <Text style={styles.gerenciaIcon}>🏢</Text>
-            </View>
-
-            <View style={styles.gerenciatag}>
-              <Text style={styles.gerenciatagText}>GESTÃO</Text>
-            </View>
-
-            <Text style={styles.gerenciaTitle}>Gerência{'\n'}do Setor</Text>
-            <Text style={styles.gerenciaDesc}>
-              Administração, relatórios{'\n'}e controle do setor
-            </Text>
-
-            <View style={styles.gerenciaBtn}>
-              <Text style={styles.gerenciaBtnText}>Entrar →</Text>
-            </View>
-          </View>
-
-          <View style={styles.gerenciaAccent} />
         </TouchableOpacity>
       </View>
 
@@ -112,14 +84,16 @@ const styles = StyleSheet.create({
   },
   cardsContainer: {
     flex: 1,
-    flexDirection: 'row',
-    gap: Spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingBottom: Spacing.lg,
   },
 
   /* ---- Shared card base ---- */
   bolaoCard: {
-    flex: 1,
+    width: '100%',
+    maxWidth: 420,
+    minHeight: 320,
     borderRadius: BorderRadius.xl,
     backgroundColor: '#0A1A0F',
     borderWidth: 1.5,

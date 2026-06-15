@@ -398,6 +398,15 @@ const stS = StyleSheet.create({
 
 // ─── Round matches panel ──────────────────────────────────────────────────────
 
+/** Primeira rodada (1-3) que ainda tem jogos não encerrados; se todas completas, retorna a 3ª. */
+function initialRoundForGroup(group: ApiGroup): 1 | 2 | 3 {
+  for (const r of [1, 2, 3] as const) {
+    const rMatches = group.matches.filter((m) => m.round === `R${r}`);
+    if (rMatches.length > 0 && rMatches.some((m) => m.status !== 'FINISHED')) return r;
+  }
+  return 3;
+}
+
 function MatchesPanel({
   group, isAdmin, onMatchSaved,
 }: {
@@ -405,7 +414,7 @@ function MatchesPanel({
   isAdmin: boolean;
   onMatchSaved: () => void;
 }): React.JSX.Element {
-  const [round, setRound] = useState<1 | 2 | 3>(1);
+  const [round, setRound] = useState<1 | 2 | 3>(() => initialRoundForGroup(group));
   const matches = group.matches.filter((m) => m.round === `R${round}`);
 
   return (

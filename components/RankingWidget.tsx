@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { getRanking } from '@/services/ranking';
@@ -48,14 +48,7 @@ export function RankingWidget({ refreshKey = 0 }: RankingWidgetProps): React.JSX
   if (players.length === 0) return <View />;
 
   const myIdx = players.findIndex((p) => p.id === user?.id);
-  const inTop3 = myIdx >= 0 && myIdx <= 2;
   const myPlayer = myIdx >= 0 ? players[myIdx] : null;
-
-  const top2 = players.slice(0, Math.min(2, players.length));
-  const thirdRow = inTop3
-    ? (players[2] ?? null)
-    : (myIdx >= 0 ? players[myIdx] : (players[2] ?? null));
-  const showEllipsis = !inTop3 && myIdx > 2;
 
   function renderRow(p: Player, rank: number): React.JSX.Element {
     const isMe = p.id === user?.id;
@@ -104,17 +97,9 @@ export function RankingWidget({ refreshKey = 0 }: RankingWidgetProps): React.JSX
       </TouchableOpacity>
 
       {expanded && (
-        <View>
-          {top2.map((p, i) => renderRow(p, i))}
-
-          {showEllipsis && (
-            <View style={styles.ellipsisRow}>
-              <Text style={styles.ellipsisTxt}>·  ·  ·</Text>
-            </View>
-          )}
-
-          {thirdRow !== null && renderRow(thirdRow, inTop3 ? 2 : myIdx)}
-        </View>
+        <ScrollView style={styles.list} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+          {players.map((p, i) => renderRow(p, i))}
+        </ScrollView>
       )}
     </View>
   );
@@ -170,6 +155,9 @@ const styles = StyleSheet.create({
   loadingIndicator: {
     marginLeft: 4,
   },
+  list: {
+    maxHeight: 320,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -190,7 +178,5 @@ const styles = StyleSheet.create({
   nameTxtMe: { color: Colors.accentGold, fontWeight: FontWeights.bold },
   ptsTxt: { fontSize: FontSizes.sm, color: Colors.textSecondary, fontWeight: FontWeights.medium },
   ptsTxtMe: { color: Colors.accentGold, fontWeight: FontWeights.bold },
-  ellipsisRow: { paddingVertical: 3, alignItems: 'center' },
-  ellipsisTxt: { fontSize: 11, color: Colors.border, letterSpacing: 4 },
   webCursor: { cursor: 'pointer' } as object,
 });
