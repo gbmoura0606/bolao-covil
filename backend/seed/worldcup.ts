@@ -162,8 +162,8 @@ const GROUP_MATCHES: GM[] = [
 // FIFA (FWC26 Match Schedule v17, 10 Apr 2026). Horários convertidos de ET para
 // BRT (UTC-3 = ET+1), armazenados como UTC para exibição direta — mesma convenção
 // dos jogos de grupo. Os slots "3º (...)" são resolvidos pelo Anexo C do regulamento.
-type KM = [string, string, number, string, string, string, string, string];
-const KNOCKOUT_MATCHES: KM[] = [
+export type KM = [string, string, number, string, string, string, string, string];
+export const KNOCKOUT_MATCHES: KM[] = [
   // Rodada de 32 — M73–M88
   ['M73','r32', 73,'2º Grupo A','2º Grupo B',     '2026-06-28','16:00','SoFi Stadium, Los Angeles CA'],
   ['M74','r32', 74,'1º Grupo E','3º (A/B/C/D/F)', '2026-06-29','17:30','Gillette Stadium, Foxborough MA'],

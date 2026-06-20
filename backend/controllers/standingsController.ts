@@ -5,7 +5,7 @@ import { allocateThirds } from '../config/thirdPlaceAllocation';
 
 const prisma = new PrismaClient();
 
-interface TeamInfo { id: string; name: string; flagEmoji: string; country: string; }
+export interface TeamInfo { id: string; name: string; flagEmoji: string; country: string; }
 
 interface StandingRow {
   team: TeamInfo;
@@ -21,7 +21,7 @@ interface StandingRow {
   lastResults: string[];
 }
 
-type DbMatch = {
+export type DbMatch = {
   id: string;
   externalId: string | null;
   round: string;
@@ -199,130 +199,140 @@ export async function getStandings(_req: AuthenticatedRequest, res: Response): P
       orderBy: { matchDate: 'asc' },
     }) as DbMatch[];
 
-    const groupMatches = allMatches.filter((m) => m.group !== null);
-    const knockoutMatches = allMatches.filter((m) => m.group === null && m.externalId !== null);
-
-    // Group matches by group ID
-    const byGroup = new Map<string, DbMatch[]>();
-    for (const m of groupMatches) {
-      const g = m.group!;
-      if (!byGroup.has(g)) byGroup.set(g, []);
-      byGroup.get(g)!.push(m);
-    }
-
-    // Compute group standings
-    const groupStandings = new Map<string, StandingRow[]>();
-    const groups = Array.from(byGroup.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([groupId, matches]) => {
-        const standings = computeStandings(matches, groupId);
-        groupStandings.set(groupId, standings);
-
-        const teamsSeen = new Set<string>();
-        const teams: TeamInfo[] = [];
-        for (const m of matches) {
-          if (m.homeTeam && !teamsSeen.has(m.homeTeam.id)) {
-            teamsSeen.add(m.homeTeam.id);
-            teams.push(m.homeTeam);
-          }
-          if (m.awayTeam && !teamsSeen.has(m.awayTeam.id)) {
-            teamsSeen.add(m.awayTeam.id);
-            teams.push(m.awayTeam);
-          }
-        }
-
-        return {
-          id: groupId,
-          name: `Grupo ${groupId}`,
-          teams,
-          standings,
-          matches: matches.map((m) => ({
-            id: m.id,
-            externalId: m.externalId,
-            round: m.round,
-            homeTeam: m.homeTeam,
-            awayTeam: m.awayTeam,
-            homeScore: m.homeScore,
-            awayScore: m.awayScore,
-            status: m.status,
-            matchDate: m.matchDate.toISOString(),
-            venue: m.venue,
-          })),
-        };
-      });
-
-    // Thirds ranking: 3rd-place team from each group
-    const thirds = groups
-      .filter((g) => g.standings.length >= 3)
-      .map((g) => g.standings[2])
-      .sort(compareStandings);
-
-    // Overall ranking: all teams sorted globally
-    const overall = groups
-      .flatMap((g) => g.standings)
-      .sort(compareStandings);
-
-    // Alocação dos 3os colocados (Anexo C). Só é definida quando a fase de grupos
-    // termina (12 grupos, todos os jogos com placar) — antes disso os slots de 3º
-    // permanecem como rótulo de grupos possíveis (ex.: "3º (A/B/C/D/F)").
-    const groupStageDone =
-      groups.length === 12 &&
-      groupMatches.every((m) => m.homeScore !== null && m.awayScore !== null);
-    let thirdAllocation: Record<string, string> | null = null;
-    if (groupStageDone && thirds.length >= 8) {
-      thirdAllocation = allocateThirds(thirds.slice(0, 8).map((t) => t.groupId));
-    }
-
-    // Knockout bracket with slot resolution
-    const knockoutResults = new Map<string, TeamInfo | null>();
-    const bracket = knockoutMatches.map((m) => {
-      // O grupo do vencedor adversário define qual 3º colocado (Anexo C) entra no slot.
-      const pairedForHome = winnerGroupOf(m.awaySlot);
-      const pairedForAway = winnerGroupOf(m.homeSlot);
-      const homeTeam =
-        m.homeTeam ?? resolveSlot(m.homeSlot, groupStandings, knockoutResults, thirdAllocation, pairedForHome);
-      const awayTeam =
-        m.awayTeam ?? resolveSlot(m.awaySlot, groupStandings, knockoutResults, thirdAllocation, pairedForAway);
-
-      // Vencedor por placar; empate decidido nos pênaltis (mata-mata).
-      if (m.homeScore !== null && m.awayScore !== null && m.externalId) {
-        let winner: TeamInfo | null = null;
-        let loser: TeamInfo | null = null;
-        if (m.homeScore > m.awayScore) { winner = homeTeam; loser = awayTeam; }
-        else if (m.awayScore > m.homeScore) { winner = awayTeam; loser = homeTeam; }
-        else if (m.homePenalty !== null && m.awayPenalty !== null && m.homePenalty !== m.awayPenalty) {
-          if (m.homePenalty > m.awayPenalty) { winner = homeTeam; loser = awayTeam; }
-          else { winner = awayTeam; loser = homeTeam; }
-        }
-        if (winner) {
-          knockoutResults.set(`W-${m.externalId}`, winner);
-          knockoutResults.set(`L-${m.externalId}`, loser);
-        }
-      }
-
-      const numMatch = m.externalId?.match(/^M(\d+)$/);
-      return {
-        id: m.id,
-        externalId: m.externalId,
-        matchNumber: numMatch ? parseInt(numMatch[1]) : null,
-        round: m.round,
-        status: m.status,
-        homeSlot: m.homeSlot,
-        awaySlot: m.awaySlot,
-        homeTeam,
-        awayTeam,
-        homeScore: m.homeScore,
-        awayScore: m.awayScore,
-        homePenalty: m.homePenalty,
-        awayPenalty: m.awayPenalty,
-        matchDate: m.matchDate.toISOString(),
-        venue: m.venue,
-      };
-    });
-
-    res.json({ groups, thirds, overall, bracket });
+    res.json(buildStandings(allMatches));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao computar classificações.' });
   }
+}
+
+/**
+ * Núcleo puro (sem Prisma) que transforma a lista de partidas no payload de
+ * classificações + bracket resolvido. Separado de getStandings para ser testável.
+ * Espera `allMatches` ordenado por data (mata-mata depende dessa ordem para
+ * propagar vencedores das fases anteriores).
+ */
+export function buildStandings(allMatches: DbMatch[]) {
+  const groupMatches = allMatches.filter((m) => m.group !== null);
+  const knockoutMatches = allMatches.filter((m) => m.group === null && m.externalId !== null);
+
+  // Group matches by group ID
+  const byGroup = new Map<string, DbMatch[]>();
+  for (const m of groupMatches) {
+    const g = m.group!;
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g)!.push(m);
+  }
+
+  // Compute group standings
+  const groupStandings = new Map<string, StandingRow[]>();
+  const groups = Array.from(byGroup.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([groupId, matches]) => {
+      const standings = computeStandings(matches, groupId);
+      groupStandings.set(groupId, standings);
+
+      const teamsSeen = new Set<string>();
+      const teams: TeamInfo[] = [];
+      for (const m of matches) {
+        if (m.homeTeam && !teamsSeen.has(m.homeTeam.id)) {
+          teamsSeen.add(m.homeTeam.id);
+          teams.push(m.homeTeam);
+        }
+        if (m.awayTeam && !teamsSeen.has(m.awayTeam.id)) {
+          teamsSeen.add(m.awayTeam.id);
+          teams.push(m.awayTeam);
+        }
+      }
+
+      return {
+        id: groupId,
+        name: `Grupo ${groupId}`,
+        teams,
+        standings,
+        matches: matches.map((m) => ({
+          id: m.id,
+          externalId: m.externalId,
+          round: m.round,
+          homeTeam: m.homeTeam,
+          awayTeam: m.awayTeam,
+          homeScore: m.homeScore,
+          awayScore: m.awayScore,
+          status: m.status,
+          matchDate: m.matchDate.toISOString(),
+          venue: m.venue,
+        })),
+      };
+    });
+
+  // Thirds ranking: 3rd-place team from each group
+  const thirds = groups
+    .filter((g) => g.standings.length >= 3)
+    .map((g) => g.standings[2])
+    .sort(compareStandings);
+
+  // Overall ranking: all teams sorted globally
+  const overall = groups
+    .flatMap((g) => g.standings)
+    .sort(compareStandings);
+
+  // Alocação dos 3os colocados (Anexo C). Só é definida quando a fase de grupos
+  // termina (12 grupos, todos os jogos com placar) — antes disso os slots de 3º
+  // permanecem como rótulo de grupos possíveis (ex.: "3º (A/B/C/D/F)").
+  const groupStageDone =
+    groups.length === 12 &&
+    groupMatches.every((m) => m.homeScore !== null && m.awayScore !== null);
+  let thirdAllocation: Record<string, string> | null = null;
+  if (groupStageDone && thirds.length >= 8) {
+    thirdAllocation = allocateThirds(thirds.slice(0, 8).map((t) => t.groupId));
+  }
+
+  // Knockout bracket with slot resolution
+  const knockoutResults = new Map<string, TeamInfo | null>();
+  const bracket = knockoutMatches.map((m) => {
+    // O grupo do vencedor adversário define qual 3º colocado (Anexo C) entra no slot.
+    const pairedForHome = winnerGroupOf(m.awaySlot);
+    const pairedForAway = winnerGroupOf(m.homeSlot);
+    const homeTeam =
+      m.homeTeam ?? resolveSlot(m.homeSlot, groupStandings, knockoutResults, thirdAllocation, pairedForHome);
+    const awayTeam =
+      m.awayTeam ?? resolveSlot(m.awaySlot, groupStandings, knockoutResults, thirdAllocation, pairedForAway);
+
+    // Vencedor por placar; empate decidido nos pênaltis (mata-mata).
+    if (m.homeScore !== null && m.awayScore !== null && m.externalId) {
+      let winner: TeamInfo | null = null;
+      let loser: TeamInfo | null = null;
+      if (m.homeScore > m.awayScore) { winner = homeTeam; loser = awayTeam; }
+      else if (m.awayScore > m.homeScore) { winner = awayTeam; loser = homeTeam; }
+      else if (m.homePenalty !== null && m.awayPenalty !== null && m.homePenalty !== m.awayPenalty) {
+        if (m.homePenalty > m.awayPenalty) { winner = homeTeam; loser = awayTeam; }
+        else { winner = awayTeam; loser = homeTeam; }
+      }
+      if (winner) {
+        knockoutResults.set(`W-${m.externalId}`, winner);
+        knockoutResults.set(`L-${m.externalId}`, loser);
+      }
+    }
+
+    const numMatch = m.externalId?.match(/^M(\d+)$/);
+    return {
+      id: m.id,
+      externalId: m.externalId,
+      matchNumber: numMatch ? parseInt(numMatch[1]) : null,
+      round: m.round,
+      status: m.status,
+      homeSlot: m.homeSlot,
+      awaySlot: m.awaySlot,
+      homeTeam,
+      awayTeam,
+      homeScore: m.homeScore,
+      awayScore: m.awayScore,
+      homePenalty: m.homePenalty,
+      awayPenalty: m.awayPenalty,
+      matchDate: m.matchDate.toISOString(),
+      venue: m.venue,
+    };
+  });
+
+  return { groups, thirds, overall, bracket };
 }
