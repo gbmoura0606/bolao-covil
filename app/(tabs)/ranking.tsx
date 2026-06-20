@@ -851,10 +851,16 @@ function MataMataView({
                       : (<Text style={mmS.slotTbd}>{m.homeSlot}</Text>)}
                   </View>
                   <View style={mmS.vs}>
-                    {hasScore
-                      ? <Text style={mmS.score}>{m.homeScore} – {m.awayScore}</Text>
-                      : <Text style={mmS.vsText}>×</Text>}
-                    {hasPens && <Text style={mmS.penInfo}>{m.homePenalty} – {m.awayPenalty} pên.</Text>}
+                    {isAdmin && teamsKnown && m.status !== 'FINISHED' ? (
+                      <AdminMatchControls match={m} onSaved={onMatchSaved} allowPenalties />
+                    ) : hasScore ? (
+                      <>
+                        <Text style={mmS.score}>{m.homeScore} – {m.awayScore}</Text>
+                        {hasPens && <Text style={mmS.penInfo}>{m.homePenalty} – {m.awayPenalty} pên.</Text>}
+                      </>
+                    ) : (
+                      <Text style={mmS.vsText}>×</Text>
+                    )}
                   </View>
                   <View style={[mmS.slot, mmS.slotAway]}>
                     {m.awayTeam
@@ -863,11 +869,6 @@ function MataMataView({
                   </View>
                 </View>
                 {m.venue && <Text style={mmS.venue}>{m.venue}</Text>}
-                {isAdmin && teamsKnown && (
-                  <View style={mmS.adminBox}>
-                    <AdminMatchControls match={m} onSaved={onMatchSaved} allowPenalties />
-                  </View>
-                )}
               </View>
             );
           })}
@@ -895,14 +896,13 @@ const mmS = StyleSheet.create({
   matchNum: { fontSize: 10, fontWeight: FontWeights.semibold, color: Colors.accentGold },
   matchDate: { fontSize: 10, color: Colors.textSecondary },
   penInfo: { fontSize: 9, color: Colors.textSecondary, fontWeight: FontWeights.semibold, marginTop: 2 },
-  adminBox: { paddingHorizontal: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border },
   matchBody: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.sm, paddingVertical: Spacing.md },
   slot: { flex: 1, alignItems: 'center', gap: 4 },
   slotAway: {},
   slotFlag: { fontSize: 24 },
   slotName: { fontSize: 12, fontWeight: FontWeights.semibold, color: Colors.textPrimary, textAlign: 'center' },
   slotTbd: { fontSize: 11, color: Colors.textSecondary, textAlign: 'center', fontStyle: 'italic', lineHeight: 15 },
-  vs: { width: 56, alignItems: 'center' },
+  vs: { minWidth: 104, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   vsText: { fontSize: FontSizes.lg, color: Colors.border, fontWeight: FontWeights.bold },
   score: { fontSize: FontSizes.lg, fontWeight: FontWeights.bold, color: Colors.accentGold },
   venue: { fontSize: 10, color: Colors.textSecondary, textAlign: 'center', paddingBottom: Spacing.sm, paddingHorizontal: Spacing.sm },
