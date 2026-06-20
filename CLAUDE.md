@@ -39,10 +39,25 @@ Os `homeSlot`/`awaySlot` das partidas de mata-mata são strings resolvidas por
 
 | Formato | Resolve para |
 |---|---|
-| `"1º Grupo A"` | 1º colocado do Grupo A (calculado dos jogos) |
-| `"3º melhor (n)"` | n-ésimo melhor 3º colocado entre todos os grupos |
-| `"Vencedor M49"` | Time que venceu a partida número 49 |
-| `"Perdedor M77"` | Time que perdeu a partida 77 (disputa de 3º lugar) |
+| `"1º Grupo A"` / `"2º Grupo A"` | 1º/2º colocado do Grupo A (calculado dos jogos) |
+| `"3º (A/B/C/D/F)"` | 3º colocado alocado pelo **Anexo C** — os grupos entre parênteses são o rótulo de fallback; a alocação exata vem da tabela oficial |
+| `"Vencedor M89"` | Time que venceu a partida número 89 (pênaltis decidem empate no mata-mata) |
+| `"Perdedor M101"` | Time que perdeu a partida 101 (alimenta a disputa de 3º lugar) |
+
+### Alocação dos 3os colocados (Anexo C do regulamento)
+
+Os 8 melhores 3os colocados (de 12 grupos) avançam à Rodada de 32. **Qual** 3º
+enfrenta **qual** vencedor de grupo depende do conjunto exato dos 8 grupos
+classificados — são C(12,8) = **495 combinações**, tabeladas no Anexo C do
+regulamento FIFA, codificadas em `backend/config/thirdPlaceAllocation.ts`
+(gerado a partir do PDF, não editar à mão).
+
+`standingsController` só resolve esses slots quando a fase de grupos termina
+(12 grupos, todos os jogos com placar): pega os 8 melhores 3os, monta a chave
+(letras dos grupos em ordem), consulta `allocateThirds()` e cruza com o grupo do
+vencedor adversário de cada confronto. Antes disso o slot exibe o rótulo de
+grupos possíveis. Numeração (M73–M104), confrontos, datas, horários (BRT = ET+1)
+e estádios seguem o *FWC26 Match Schedule* oficial.
 
 ---
 
@@ -66,7 +81,7 @@ Schema: `backend/prisma/schema.prisma`. Deploy aplica schema via `prisma db push
 |---|---|
 | `app/landing.tsx` | Tela inicial — escolha entre Bolão e Gerência |
 | `app/login.tsx` | Login do Bolão (nickname + senha, backend real) |
-| `app/(tabs)/ranking.tsx` | Tabelas oficiais Copa 2026 (4 fases navegáveis) |
+| `app/(tabs)/ranking.tsx` | Tabelas oficiais Copa 2026 — 4 abas: Critérios · 3os Lugares · Fase de Grupos · Mata-Mata (resultados oficiais atualizados pelo ADM) |
 | `app/(tabs)/jogos.tsx` | Palpites com autosave + polling ao vivo |
 | `app/(tabs)/ligas.tsx` | Ligas do bolão |
 | `app/liga-ranking.tsx` | Ranking da liga + config de pontuação (dono) |

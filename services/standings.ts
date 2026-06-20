@@ -42,12 +42,15 @@ export interface BracketMatch {
   externalId: string | null;
   matchNumber: number | null;
   round: string;
+  status: string;
   homeSlot: string | null;
   awaySlot: string | null;
   homeTeam: TeamInfo | null;
   awayTeam: TeamInfo | null;
   homeScore: number | null;
   awayScore: number | null;
+  homePenalty: number | null;
+  awayPenalty: number | null;
   matchDate: string;
   venue: string | null;
 }

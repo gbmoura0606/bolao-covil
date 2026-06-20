@@ -50,6 +50,8 @@ model Match {
   status     MatchStatus @default(OPEN)
   homeScore  Int?
   awayScore  Int?
+  homePenalty Int?       // disputa de pênaltis no mata-mata (empate no tempo normal)
+  awayPenalty Int?
   round      String
   group      String?
   venue      String?

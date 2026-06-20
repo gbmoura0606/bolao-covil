@@ -35,15 +35,31 @@ function MatchStatusBadge({ status }: { status: string }): React.JSX.Element {
   );
 }
 
+/** Forma mínima que os controles de admin precisam — atende GroupMatch e BracketMatch. */
+interface EditableMatch {
+  id: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  status: string;
+  matchDate: string;
+  homePenalty?: number | null;
+  awayPenalty?: number | null;
+}
+
 function AdminMatchControls({
   match,
   onSaved,
+  allowPenalties = false,
 }: {
-  match: GroupMatch;
+  match: EditableMatch;
   onSaved: () => void;
+  /** Mata-mata: habilita disputa de pênaltis quando o tempo normal termina empatado. */
+  allowPenalties?: boolean;
 }): React.JSX.Element {
   const [home, setHome] = useState(match.homeScore?.toString() ?? '');
   const [away, setAway] = useState(match.awayScore?.toString() ?? '');
+  const [homePen, setHomePen] = useState(match.homePenalty?.toString() ?? '');
+  const [awayPen, setAwayPen] = useState(match.awayPenalty?.toString() ?? '');
   const [confirming, setConfirming] = useState<'save' | 'finish' | 'reset' | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -52,7 +68,9 @@ function AdminMatchControls({
   useEffect(() => {
     setHome(match.homeScore?.toString() ?? '');
     setAway(match.awayScore?.toString() ?? '');
-  }, [match.homeScore, match.awayScore]);
+    setHomePen(match.homePenalty?.toString() ?? '');
+    setAwayPen(match.awayPenalty?.toString() ?? '');
+  }, [match.homeScore, match.awayScore, match.homePenalty, match.awayPenalty]);
 
   useEffect(() => () => { if (confirmTimer.current) clearTimeout(confirmTimer.current); }, []);
 
@@ -62,7 +80,22 @@ function AdminMatchControls({
   const canFinish = !isFinished && Date.now() >= kickoff.getTime() + FINISH_DELAY_MS;
   const canReset = !isFinished && !started;
   const hasScore = home !== '' && away !== '';
-  const dirty = home !== (match.homeScore?.toString() ?? '') || away !== (match.awayScore?.toString() ?? '');
+  const isDraw = hasScore && home === away;
+  const showPen = allowPenalties && isDraw;
+  const dirty =
+    home !== (match.homeScore?.toString() ?? '') ||
+    away !== (match.awayScore?.toString() ?? '') ||
+    homePen !== (match.homePenalty?.toString() ?? '') ||
+    awayPen !== (match.awayPenalty?.toString() ?? '');
+
+  /** Campos de pênalti a enviar: preenchidos no empate, limpos caso contrário. */
+  function penaltyBody(): Record<string, number | null> {
+    if (!allowPenalties) return {};
+    if (showPen && homePen !== '' && awayPen !== '') {
+      return { homePenalty: parseInt(homePen, 10), awayPenalty: parseInt(awayPen, 10) };
+    }
+    return { homePenalty: null, awayPenalty: null };
+  }
 
   function arm(action: 'save' | 'finish' | 'reset'): boolean {
     if (confirming === action) {
@@ -139,6 +172,33 @@ function AdminMatchControls({
         />
       </View>
 
+      {showPen && (
+        <View style={adS.penRow}>
+          <Text style={adS.penLabel}>Pênaltis</Text>
+          <TextInput
+            style={[adS.penInput, homePen !== '' && adS.inputFilled]}
+            value={homePen}
+            onChangeText={(v) => setHomePen(v.replace(/[^0-9]/g, '').slice(0, 2))}
+            keyboardType="number-pad"
+            maxLength={2}
+            placeholder="?"
+            placeholderTextColor={Colors.border}
+            selectTextOnFocus
+          />
+          <Text style={adS.sep}>×</Text>
+          <TextInput
+            style={[adS.penInput, awayPen !== '' && adS.inputFilled]}
+            value={awayPen}
+            onChangeText={(v) => setAwayPen(v.replace(/[^0-9]/g, '').slice(0, 2))}
+            keyboardType="number-pad"
+            maxLength={2}
+            placeholder="?"
+            placeholderTextColor={Colors.border}
+            selectTextOnFocus
+          />
+        </View>
+      )}
+
       <View style={adS.btnsRow}>
         {dirty && hasScore && (
           <TouchableOpacity
@@ -148,6 +208,7 @@ function AdminMatchControls({
               const body: Record<string, unknown> = {
                 homeScore: parseInt(home, 10),
                 awayScore: parseInt(away, 10),
+                ...penaltyBody(),
               };
               if (match.status === 'OPEN' && started) body.status = 'CLOSED';
               void doSave(body);
@@ -165,7 +226,7 @@ function AdminMatchControls({
             style={[adS.btn, adS.btnFinish, confirming === 'finish' && adS.btnConfirm]}
             onPress={() => {
               if (!arm('finish')) return;
-              void doSave({ homeScore: parseInt(home, 10), awayScore: parseInt(away, 10), status: 'FINISHED' });
+              void doSave({ homeScore: parseInt(home, 10), awayScore: parseInt(away, 10), status: 'FINISHED', ...penaltyBody() });
             }}
             disabled={saving}
             activeOpacity={0.8}
@@ -218,6 +279,16 @@ const adS = StyleSheet.create({
   },
   inputFilled: { borderColor: '#3B82F6' },
   sep: { fontSize: FontSizes.sm, color: Colors.textSecondary, fontWeight: FontWeights.bold },
+  penRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginBottom: 5 },
+  penLabel: { fontSize: 9, color: Colors.textSecondary, fontWeight: FontWeights.bold, marginRight: 2, textTransform: 'uppercase' },
+  penInput: {
+    backgroundColor: Colors.backgroundAlt,
+    borderWidth: 2, borderColor: Colors.border,
+    borderRadius: BorderRadius.sm,
+    width: 30, height: 30,
+    fontSize: FontSizes.sm, fontWeight: FontWeights.bold,
+    color: Colors.textPrimary, textAlign: 'center',
+  },
   btnsRow: { flexDirection: 'row', gap: 4, flexWrap: 'wrap', justifyContent: 'center' },
   btn: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
@@ -241,12 +312,13 @@ const IS_WIDE = SCREEN_W >= 700;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Phase = 'criterios' | 'terceiros' | 'grupos';
-const PHASES: Phase[] = ['criterios', 'terceiros', 'grupos'];
+type Phase = 'criterios' | 'terceiros' | 'grupos' | 'matamata';
+const PHASES: Phase[] = ['criterios', 'terceiros', 'grupos', 'matamata'];
 const PHASE_LABEL: Record<Phase, string> = {
   criterios: 'Critérios',
   terceiros: '3os Lugares',
   grupos: 'Fase de Grupos',
+  matamata: 'Mata-Mata',
 };
 
 type KnockoutRound = 'r32' | 'r16' | 'qf' | 'sf' | 'final' | 'terceiro';
@@ -713,7 +785,13 @@ const crS = StyleSheet.create({
 
 // ─── MATA-MATA ────────────────────────────────────────────────────────────────
 
-function MataMataView({ bracket }: { bracket: BracketMatch[] }): React.JSX.Element {
+function MataMataView({
+  bracket, isAdmin, onMatchSaved,
+}: {
+  bracket: BracketMatch[];
+  isAdmin: boolean;
+  onMatchSaved: () => void;
+}): React.JSX.Element {
   const [koRound, setKoRound] = useState<KnockoutRound>('r32');
   const matches = bracket.filter((m) => m.round === koRound);
   const ridx = KNOCKOUT_ROUNDS.indexOf(koRound);
@@ -743,39 +821,56 @@ function MataMataView({ bracket }: { bracket: BracketMatch[] }): React.JSX.Eleme
           <View style={mmS.notice}>
             <Ionicons name="information-circle-outline" size={13} color={Colors.textSecondary} />
             <Text style={mmS.noticeTxt}>
-              Os 8 melhores 3os colocados serão distribuídos conforme tabela oficial FIFA.
-              Times nos slots são preenchidos automaticamente ao atualizar os resultados da fase de grupos.
+              Os 8 melhores 3os colocados são distribuídos conforme o Anexo C do regulamento FIFA
+              (495 combinações possíveis). Ao encerrar a fase de grupos, cada 3º é alocado ao confronto
+              correto automaticamente. Os resultados são atualizados pela administração.
             </Text>
           </View>
         )}
 
         <View style={IS_WIDE ? mmS.grid : undefined}>
-          {matches.map((m: BracketMatch) => (
-            <View key={m.id} style={[mmS.card, IS_WIDE && mmS.cardWide]}>
-              <View style={mmS.cardHeader}>
-                <Text style={mmS.matchNum}>Jogo {m.matchNumber}</Text>
-                {m.matchDate && <Text style={mmS.matchDate}>{fmtDate(m.matchDate)}</Text>}
+          {matches.map((m: BracketMatch) => {
+            const hasScore = m.homeScore !== null && m.awayScore !== null;
+            const hasPens = m.homePenalty !== null && m.awayPenalty !== null;
+            const teamsKnown = !!(m.homeTeam && m.awayTeam);
+            return (
+              <View key={m.id} style={[mmS.card, IS_WIDE && mmS.cardWide]}>
+                <View style={mmS.cardHeader}>
+                  <Text style={mmS.matchNum}>Jogo {m.matchNumber}</Text>
+                  <View style={mmS.headerRight}>
+                    {m.matchDate && (
+                      <Text style={mmS.matchDate}>{fmtDate(m.matchDate)} · {m.matchDate.substring(11, 16)}</Text>
+                    )}
+                    <MatchStatusBadge status={m.status} />
+                  </View>
+                </View>
+                <View style={mmS.matchBody}>
+                  <View style={mmS.slot}>
+                    {m.homeTeam
+                      ? (<><FlagImage country={m.homeTeam.country} height={24} /><Text style={mmS.slotName}>{m.homeTeam.name}</Text></>)
+                      : (<Text style={mmS.slotTbd}>{m.homeSlot}</Text>)}
+                  </View>
+                  <View style={mmS.vs}>
+                    {hasScore
+                      ? <Text style={mmS.score}>{m.homeScore} – {m.awayScore}</Text>
+                      : <Text style={mmS.vsText}>×</Text>}
+                    {hasPens && <Text style={mmS.penInfo}>{m.homePenalty} – {m.awayPenalty} pên.</Text>}
+                  </View>
+                  <View style={[mmS.slot, mmS.slotAway]}>
+                    {m.awayTeam
+                      ? (<><FlagImage country={m.awayTeam.country} height={24} /><Text style={mmS.slotName}>{m.awayTeam.name}</Text></>)
+                      : (<Text style={mmS.slotTbd}>{m.awaySlot}</Text>)}
+                  </View>
+                </View>
+                {m.venue && <Text style={mmS.venue}>{m.venue}</Text>}
+                {isAdmin && teamsKnown && (
+                  <View style={mmS.adminBox}>
+                    <AdminMatchControls match={m} onSaved={onMatchSaved} allowPenalties />
+                  </View>
+                )}
               </View>
-              <View style={mmS.matchBody}>
-                <View style={mmS.slot}>
-                  {m.homeTeam
-                    ? (<><FlagImage country={m.homeTeam.country} height={24} /><Text style={mmS.slotName}>{m.homeTeam.name}</Text></>)
-                    : (<Text style={mmS.slotTbd}>{m.homeSlot}</Text>)}
-                </View>
-                <View style={mmS.vs}>
-                  {m.homeScore !== null && m.awayScore !== null
-                    ? <Text style={mmS.score}>{m.homeScore} – {m.awayScore}</Text>
-                    : <Text style={mmS.vsText}>×</Text>}
-                </View>
-                <View style={[mmS.slot, mmS.slotAway]}>
-                  {m.awayTeam
-                    ? (<><FlagImage country={m.awayTeam.country} height={24} /><Text style={mmS.slotName}>{m.awayTeam.name}</Text></>)
-                    : (<Text style={mmS.slotTbd}>{m.awaySlot}</Text>)}
-                </View>
-              </View>
-              {m.venue && <Text style={mmS.venue}>{m.venue}</Text>}
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
     </View>
@@ -796,8 +891,11 @@ const mmS = StyleSheet.create({
   card: { backgroundColor: Colors.surface, marginHorizontal: Spacing.md, marginTop: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadows.sm },
   cardWide: { width: '47%', marginHorizontal: 0, marginTop: 0 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.backgroundAlt, paddingHorizontal: Spacing.sm, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   matchNum: { fontSize: 10, fontWeight: FontWeights.semibold, color: Colors.accentGold },
   matchDate: { fontSize: 10, color: Colors.textSecondary },
+  penInfo: { fontSize: 9, color: Colors.textSecondary, fontWeight: FontWeights.semibold, marginTop: 2 },
+  adminBox: { paddingHorizontal: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border },
   matchBody: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.sm, paddingVertical: Spacing.md },
   slot: { flex: 1, alignItems: 'center', gap: 4 },
   slotAway: {},
@@ -860,6 +958,7 @@ export default function TabelasScreen(): React.JSX.Element {
             {phase === 'grupos'    && <FaseDeGrupos groups={data.groups} thirds={data.thirds} isAdmin={canAccessGerencia} onMatchSaved={handleMatchSaved} />}
             {phase === 'terceiros' && <TerceirosColocados thirds={data.thirds} />}
             {phase === 'criterios' && <CriteriosView overall={data.overall} />}
+            {phase === 'matamata' && <MataMataView bracket={data.bracket} isAdmin={canAccessGerencia} onMatchSaved={handleMatchSaved} />}
           </>
         ) : null}
       </View>

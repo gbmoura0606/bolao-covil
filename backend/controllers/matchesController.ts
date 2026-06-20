@@ -51,14 +51,21 @@ export async function createMatch(req: AuthenticatedRequest, res: Response): Pro
 
 export async function updateMatchScore(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { id } = req.params;
-  const { homeScore, awayScore, status } = req.body as {
+  const { homeScore, awayScore, status, homePenalty, awayPenalty } = req.body as {
     homeScore?: number; awayScore?: number; status?: MatchStatus;
+    homePenalty?: number | null; awayPenalty?: number | null;
   };
 
   const validScore = (v: number | undefined): boolean =>
     v === undefined || (Number.isInteger(v) && v >= 0 && v <= 99);
+  const validPen = (v: number | null | undefined): boolean =>
+    v === undefined || v === null || (Number.isInteger(v) && v >= 0 && v <= 99);
   if (!validScore(homeScore) || !validScore(awayScore)) {
     res.status(400).json({ error: 'Placar deve ser um inteiro entre 0 e 99.' });
+    return;
+  }
+  if (!validPen(homePenalty) || !validPen(awayPenalty)) {
+    res.status(400).json({ error: 'Pênaltis devem ser um inteiro entre 0 e 99.' });
     return;
   }
 
@@ -89,6 +96,8 @@ export async function updateMatchScore(req: AuthenticatedRequest, res: Response)
         ...(homeScore !== undefined && { homeScore }),
         ...(awayScore !== undefined && { awayScore }),
         ...(status !== undefined && { status }),
+        ...(homePenalty !== undefined && { homePenalty }),
+        ...(awayPenalty !== undefined && { awayPenalty }),
       },
       include: matchInclude,
     });
@@ -138,7 +147,7 @@ export async function resetMatch(req: AuthenticatedRequest, res: Response): Prom
     }
     await prisma.match.update({
       where: { id },
-      data: { homeScore: null, awayScore: null, status: 'OPEN' },
+      data: { homeScore: null, awayScore: null, homePenalty: null, awayPenalty: null, status: 'OPEN' },
     });
     console.log(`[gerencia] ${req.userNickname ?? req.userId} resetou partida ${existing.externalId ?? id}`);
     res.json({ success: true });

@@ -48,7 +48,7 @@ export async function getMatchById(id: string): Promise<Match | undefined> {
 
 export async function patchMatchScore(
   id: string,
-  body: { homeScore?: number; awayScore?: number; status?: string },
+  body: { homeScore?: number; awayScore?: number; status?: string; homePenalty?: number | null; awayPenalty?: number | null },
 ): Promise<void> {
   await api.patch(`/api/matches/${id}/score`, body);
 }

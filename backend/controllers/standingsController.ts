@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthenticatedRequest } from '../middleware/auth';
+import { allocateThirds } from '../config/thirdPlaceAllocation';
 
 const prisma = new PrismaClient();
 
@@ -29,6 +30,8 @@ type DbMatch = {
   awayTeamId: string | null;
   homeScore: number | null;
   awayScore: number | null;
+  homePenalty: number | null;
+  awayPenalty: number | null;
   status: string;
   matchDate: Date;
   venue: string | null;
@@ -147,8 +150,11 @@ function computeStandings(matches: DbMatch[], groupId: string): StandingRow[] {
 function resolveSlot(
   slot: string | null,
   groupStandings: Map<string, StandingRow[]>,
-  thirdsRanking: StandingRow[],
   knockoutResults: Map<string, TeamInfo | null>,
+  /** Anexo C: { grupo do vencedor -> grupo do 3º adversário }. null até a fase de grupos terminar. */
+  thirdAllocation: Record<string, string> | null,
+  /** Grupo do vencedor adversário neste confronto, usado para resolver o slot de 3º. */
+  pairedWinnerGroup: string | null,
 ): TeamInfo | null {
   if (!slot) return null;
 
@@ -158,13 +164,13 @@ function resolveSlot(
     return groupStandings.get(groupSlot[2])?.[pos]?.team ?? null;
   }
 
-  const thirdFromGroups = slot.match(/^Melhor 3º \(([A-L/]+)\)$/);
-  if (thirdFromGroups) {
-    const allowed = new Set(thirdFromGroups[1].split('/'));
-    for (const t of thirdsRanking) {
-      if (allowed.has(t.groupId)) return t.team;
-    }
-    return null;
+  // 3º colocado: a alocação exata vem do Anexo C, em função do grupo do vencedor
+  // adversário e do conjunto dos 8 grupos cujos 3os se classificaram.
+  if (/^3º \(/.test(slot)) {
+    if (!thirdAllocation || !pairedWinnerGroup) return null;
+    const thirdGroup = thirdAllocation[pairedWinnerGroup];
+    if (!thirdGroup) return null;
+    return groupStandings.get(thirdGroup)?.[2]?.team ?? null;
   }
 
   const winnerSlot = slot.match(/^Vencedor M(\d+)$/);
@@ -178,6 +184,12 @@ function resolveSlot(
   }
 
   return null;
+}
+
+/** Grupo do vencedor ("1º Grupo X") presente em um dos slots do confronto. */
+function winnerGroupOf(slot: string | null): string | null {
+  const m = slot?.match(/^1º Grupo ([A-L])$/);
+  return m ? m[1] : null;
 }
 
 export async function getStandings(_req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -250,21 +262,41 @@ export async function getStandings(_req: AuthenticatedRequest, res: Response): P
       .flatMap((g) => g.standings)
       .sort(compareStandings);
 
+    // Alocação dos 3os colocados (Anexo C). Só é definida quando a fase de grupos
+    // termina (12 grupos, todos os jogos com placar) — antes disso os slots de 3º
+    // permanecem como rótulo de grupos possíveis (ex.: "3º (A/B/C/D/F)").
+    const groupStageDone =
+      groups.length === 12 &&
+      groupMatches.every((m) => m.homeScore !== null && m.awayScore !== null);
+    let thirdAllocation: Record<string, string> | null = null;
+    if (groupStageDone && thirds.length >= 8) {
+      thirdAllocation = allocateThirds(thirds.slice(0, 8).map((t) => t.groupId));
+    }
+
     // Knockout bracket with slot resolution
     const knockoutResults = new Map<string, TeamInfo | null>();
     const bracket = knockoutMatches.map((m) => {
+      // O grupo do vencedor adversário define qual 3º colocado (Anexo C) entra no slot.
+      const pairedForHome = winnerGroupOf(m.awaySlot);
+      const pairedForAway = winnerGroupOf(m.homeSlot);
       const homeTeam =
-        m.homeTeam ?? resolveSlot(m.homeSlot, groupStandings, thirds, knockoutResults);
+        m.homeTeam ?? resolveSlot(m.homeSlot, groupStandings, knockoutResults, thirdAllocation, pairedForHome);
       const awayTeam =
-        m.awayTeam ?? resolveSlot(m.awaySlot, groupStandings, thirds, knockoutResults);
+        m.awayTeam ?? resolveSlot(m.awaySlot, groupStandings, knockoutResults, thirdAllocation, pairedForAway);
 
+      // Vencedor por placar; empate decidido nos pênaltis (mata-mata).
       if (m.homeScore !== null && m.awayScore !== null && m.externalId) {
-        if (m.homeScore > m.awayScore) {
-          knockoutResults.set(`W-${m.externalId}`, homeTeam);
-          knockoutResults.set(`L-${m.externalId}`, awayTeam);
-        } else if (m.awayScore > m.homeScore) {
-          knockoutResults.set(`W-${m.externalId}`, awayTeam);
-          knockoutResults.set(`L-${m.externalId}`, homeTeam);
+        let winner: TeamInfo | null = null;
+        let loser: TeamInfo | null = null;
+        if (m.homeScore > m.awayScore) { winner = homeTeam; loser = awayTeam; }
+        else if (m.awayScore > m.homeScore) { winner = awayTeam; loser = homeTeam; }
+        else if (m.homePenalty !== null && m.awayPenalty !== null && m.homePenalty !== m.awayPenalty) {
+          if (m.homePenalty > m.awayPenalty) { winner = homeTeam; loser = awayTeam; }
+          else { winner = awayTeam; loser = homeTeam; }
+        }
+        if (winner) {
+          knockoutResults.set(`W-${m.externalId}`, winner);
+          knockoutResults.set(`L-${m.externalId}`, loser);
         }
       }
 
@@ -274,12 +306,15 @@ export async function getStandings(_req: AuthenticatedRequest, res: Response): P
         externalId: m.externalId,
         matchNumber: numMatch ? parseInt(numMatch[1]) : null,
         round: m.round,
+        status: m.status,
         homeSlot: m.homeSlot,
         awaySlot: m.awaySlot,
         homeTeam,
         awayTeam,
         homeScore: m.homeScore,
         awayScore: m.awayScore,
+        homePenalty: m.homePenalty,
+        awayPenalty: m.awayPenalty,
         matchDate: m.matchDate.toISOString(),
         venue: m.venue,
       };

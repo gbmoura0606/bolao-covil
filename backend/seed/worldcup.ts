@@ -158,45 +158,49 @@ const GROUP_MATCHES: GM[] = [
 ];
 
 // ── Knockout matches: [extId, round, num, homeSlot, awaySlot, date, time, venue] ──
+// Numeração, confrontos, datas, horários e estádios conforme o calendário oficial
+// FIFA (FWC26 Match Schedule v17, 10 Apr 2026). Horários convertidos de ET para
+// BRT (UTC-3 = ET+1), armazenados como UTC para exibição direta — mesma convenção
+// dos jogos de grupo. Os slots "3º (...)" são resolvidos pelo Anexo C do regulamento.
 type KM = [string, string, number, string, string, string, string, string];
 const KNOCKOUT_MATCHES: KM[] = [
-  // Rodada de 32 — M73–M88  (numeração "segunda fase 1-16" do calendário oficial)
-  ['M73','r32', 73,'1º Grupo E','Melhor 3º (A/B/C/D/F)','2026-06-29','17:30','Gillette Stadium, Foxborough MA'],
-  ['M74','r32', 74,'1º Grupo I','Melhor 3º (C/D/F/G/H)','2026-06-30','18:00','MetLife Stadium, East Rutherford NJ'],
-  ['M75','r32', 75,'2º Grupo A','2º Grupo B',            '2026-06-28','16:00','SoFi Stadium, Los Angeles CA'],
-  ['M76','r32', 76,'1º Grupo F','2º Grupo C',            '2026-06-29','22:00','Estadio BBVA, Monterrey MEX'],
-  ['M77','r32', 77,'2º Grupo K','2º Grupo L',            '2026-07-02','20:00','BMO Field, Toronto CAN'],
-  ['M78','r32', 78,'1º Grupo H','2º Grupo J',            '2026-07-02','16:00','SoFi Stadium, Los Angeles CA'],
-  ['M79','r32', 79,'1º Grupo D','Melhor 3º (B/E/F/I/J)','2026-07-01','21:00','Levi\'s Stadium, Santa Clara CA'],
-  ['M80','r32', 80,'1º Grupo G','Melhor 3º (A/E/H/I/J)','2026-07-01','17:00','Lumen Field, Seattle WA'],
-  ['M81','r32', 81,'1º Grupo C','2º Grupo F',            '2026-06-29','14:00','NRG Stadium, Houston TX'],
-  ['M82','r32', 82,'2º Grupo E','2º Grupo I',            '2026-06-30','14:00','AT&T Stadium, Arlington TX'],
-  ['M83','r32', 83,'1º Grupo A','Melhor 3º (C/E/F/H/I)','2026-06-30','22:00','Estadio Azteca, Cidade do México'],
-  ['M84','r32', 84,'1º Grupo L','Melhor 3º (E/H/I/J/K)','2026-07-01','13:00','Mercedes-Benz Stadium, Atlanta GA'],
-  ['M85','r32', 85,'1º Grupo J','2º Grupo H',            '2026-07-03','19:00','Hard Rock Stadium, Miami FL'],
-  ['M86','r32', 86,'2º Grupo D','2º Grupo G',            '2026-07-03','15:00','AT&T Stadium, Arlington TX'],
-  ['M87','r32', 87,'1º Grupo B','Melhor 3º (E/F/G/I/J)','2026-07-03','00:00','BC Place, Vancouver CAN'],
-  ['M88','r32', 88,'1º Grupo K','Melhor 3º (D/E/I/J/L)','2026-07-03','22:30','Arrowhead Stadium, Kansas City MO'],
+  // Rodada de 32 — M73–M88
+  ['M73','r32', 73,'2º Grupo A','2º Grupo B',     '2026-06-28','16:00','SoFi Stadium, Los Angeles CA'],
+  ['M74','r32', 74,'1º Grupo E','3º (A/B/C/D/F)', '2026-06-29','17:30','Gillette Stadium, Foxborough MA'],
+  ['M75','r32', 75,'1º Grupo F','2º Grupo C',     '2026-06-29','22:00','Estadio BBVA, Monterrey MEX'],
+  ['M76','r32', 76,'1º Grupo C','2º Grupo F',     '2026-06-29','14:00','NRG Stadium, Houston TX'],
+  ['M77','r32', 77,'1º Grupo I','3º (C/D/F/G/H)', '2026-06-30','18:00','MetLife Stadium, East Rutherford NJ'],
+  ['M78','r32', 78,'2º Grupo E','2º Grupo I',     '2026-06-30','14:00','AT&T Stadium, Arlington TX'],
+  ['M79','r32', 79,'1º Grupo A','3º (C/E/F/H/I)', '2026-06-30','22:00','Estadio Azteca, Cidade do México'],
+  ['M80','r32', 80,'1º Grupo L','3º (E/H/I/J/K)', '2026-07-01','13:00','Mercedes-Benz Stadium, Atlanta GA'],
+  ['M81','r32', 81,'1º Grupo D','3º (B/E/F/I/J)', '2026-07-01','21:00','Levi\'s Stadium, Santa Clara CA'],
+  ['M82','r32', 82,'1º Grupo G','3º (A/E/H/I/J)', '2026-07-01','17:00','Lumen Field, Seattle WA'],
+  ['M83','r32', 83,'2º Grupo K','2º Grupo L',     '2026-07-02','20:00','BMO Field, Toronto CAN'],
+  ['M84','r32', 84,'1º Grupo H','2º Grupo J',     '2026-07-02','16:00','SoFi Stadium, Los Angeles CA'],
+  ['M85','r32', 85,'1º Grupo B','3º (E/F/G/I/J)', '2026-07-03','00:00','BC Place, Vancouver CAN'],
+  ['M86','r32', 86,'1º Grupo J','2º Grupo H',     '2026-07-03','19:00','Hard Rock Stadium, Miami FL'],
+  ['M87','r32', 87,'1º Grupo K','3º (D/E/I/J/L)', '2026-07-03','22:30','Arrowhead Stadium, Kansas City MO'],
+  ['M88','r32', 88,'2º Grupo D','2º Grupo G',     '2026-07-03','15:00','AT&T Stadium, Arlington TX'],
   // Oitavas de Final — M89–M96
-  ['M89','r16', 89,'Vencedor M73','Vencedor M74','2026-07-08','18:00','MetLife Stadium, East Rutherford NJ'],
-  ['M90','r16', 90,'Vencedor M75','Vencedor M76','2026-07-08','22:00','AT&T Stadium, Arlington TX'],
-  ['M91','r16', 91,'Vencedor M77','Vencedor M78','2026-07-09','18:00','SoFi Stadium, Los Angeles CA'],
-  ['M92','r16', 92,'Vencedor M79','Vencedor M80','2026-07-09','22:00','Hard Rock Stadium, Miami FL'],
-  ['M93','r16', 93,'Vencedor M81','Vencedor M82','2026-07-10','18:00','Levi\'s Stadium, Santa Clara CA'],
-  ['M94','r16', 94,'Vencedor M83','Vencedor M84','2026-07-10','22:00','Gillette Stadium, Foxborough MA'],
-  ['M95','r16', 95,'Vencedor M85','Vencedor M86','2026-07-11','18:00','BC Place, Vancouver CAN'],
-  ['M96','r16', 96,'Vencedor M87','Vencedor M88','2026-07-11','22:00','Estadio Azteca, Cidade do México'],
+  ['M89','r16', 89,'Vencedor M74','Vencedor M77','2026-07-04','18:00','Lincoln Financial Field, Filadélfia PA'],
+  ['M90','r16', 90,'Vencedor M73','Vencedor M75','2026-07-04','14:00','NRG Stadium, Houston TX'],
+  ['M91','r16', 91,'Vencedor M76','Vencedor M78','2026-07-05','17:00','MetLife Stadium, East Rutherford NJ'],
+  ['M92','r16', 92,'Vencedor M79','Vencedor M80','2026-07-05','21:00','Estadio Azteca, Cidade do México'],
+  ['M93','r16', 93,'Vencedor M83','Vencedor M84','2026-07-06','16:00','AT&T Stadium, Arlington TX'],
+  ['M94','r16', 94,'Vencedor M81','Vencedor M82','2026-07-06','21:00','Lumen Field, Seattle WA'],
+  ['M95','r16', 95,'Vencedor M86','Vencedor M88','2026-07-07','13:00','Mercedes-Benz Stadium, Atlanta GA'],
+  ['M96','r16', 96,'Vencedor M85','Vencedor M87','2026-07-07','17:00','BC Place, Vancouver CAN'],
   // Quartas de Final — M97–M100
-  ['M97','qf', 97,'Vencedor M89','Vencedor M90','2026-07-14','22:00','MetLife Stadium, East Rutherford NJ'],
-  ['M98','qf', 98,'Vencedor M91','Vencedor M92','2026-07-15','18:00','AT&T Stadium, Arlington TX'],
-  ['M99','qf', 99,'Vencedor M93','Vencedor M94','2026-07-15','22:00','SoFi Stadium, Los Angeles CA'],
-  ['M100','qf',100,'Vencedor M95','Vencedor M96','2026-07-14','18:00','Hard Rock Stadium, Miami FL'],
+  ['M97','qf', 97,'Vencedor M89','Vencedor M90','2026-07-09','17:00','Gillette Stadium, Foxborough MA'],
+  ['M98','qf', 98,'Vencedor M93','Vencedor M94','2026-07-10','16:00','SoFi Stadium, Los Angeles CA'],
+  ['M99','qf', 99,'Vencedor M91','Vencedor M92','2026-07-11','18:00','Hard Rock Stadium, Miami FL'],
+  ['M100','qf',100,'Vencedor M95','Vencedor M96','2026-07-11','22:00','Arrowhead Stadium, Kansas City MO'],
   // Semifinais — M101–M102
-  ['M101','sf',101,'Vencedor M97', 'Vencedor M98', '2026-07-19','22:00','MetLife Stadium, East Rutherford NJ'],
-  ['M102','sf',102,'Vencedor M99', 'Vencedor M100','2026-07-20','22:00','AT&T Stadium, Arlington TX'],
+  ['M101','sf',101,'Vencedor M97', 'Vencedor M98', '2026-07-14','16:00','AT&T Stadium, Arlington TX'],
+  ['M102','sf',102,'Vencedor M99', 'Vencedor M100','2026-07-15','16:00','Mercedes-Benz Stadium, Atlanta GA'],
   // 3º Lugar e Final
-  ['M103','terceiro',103,'Perdedor M101','Perdedor M102','2026-07-24','18:00','Hard Rock Stadium, Miami FL'],
-  ['M104','final',  104,'Vencedor M101','Vencedor M102','2026-07-26','21:00','MetLife Stadium, East Rutherford NJ'],
+  ['M103','terceiro',103,'Perdedor M101','Perdedor M102','2026-07-18','18:00','Hard Rock Stadium, Miami FL'],
+  ['M104','final',  104,'Vencedor M101','Vencedor M102','2026-07-19','16:00','MetLife Stadium, East Rutherford NJ'],
 ];
 
 export async function seedWorldCup(): Promise<void> {
