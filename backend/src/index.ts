@@ -9,6 +9,7 @@ import predictionRoutes from '../routes/predictions';
 import rankingRoutes from '../routes/ranking';
 import leagueRoutes from '../routes/leagues';
 import standingsRoutes from '../routes/standings';
+import bracketPredictionRoutes from '../routes/bracketPredictions';
 import { PrismaClient } from '@prisma/client';
 
 dotenv.config();
@@ -37,6 +38,7 @@ app.use('/api/predictions', predictionRoutes);
 app.use('/api/ranking', rankingRoutes);
 app.use('/api/leagues', leagueRoutes);
 app.use('/api/standings', standingsRoutes);
+app.use('/api/bracket-prediction', bracketPredictionRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'Rota não encontrada.' });

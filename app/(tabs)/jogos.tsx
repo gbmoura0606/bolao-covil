@@ -12,6 +12,7 @@ import {
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { MatchCard } from '@/components/MatchCard';
 import { RankingWidget } from '@/components/RankingWidget';
+import { PrevisaoChaveamento } from '@/components/PrevisaoChaveamento';
 import { usePredictions } from '@/hooks/usePredictions';
 import { useAuth } from '@/hooks/useAuth';
 import { getMatches } from '@/services/matches';
@@ -20,7 +21,7 @@ import type { Match } from '@/types';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
-type TabId = 'open' | 'live' | 'finished';
+type TabId = 'open' | 'live' | 'finished' | 'previsao';
 
 interface MatchSection {
   title: string;
@@ -73,10 +74,11 @@ function TabBar({
   liveCount: number;
   finishedCount: number;
 }): React.JSX.Element {
-  const tabs: { id: TabId; label: string; count: number; live?: boolean }[] = [
+  const tabs: { id: TabId; label: string; count?: number; live?: boolean }[] = [
     { id: 'open',     label: 'Próximos',   count: openCount },
     { id: 'live',     label: 'Ao Vivo',    count: liveCount, live: true },
     { id: 'finished', label: 'Resultados', count: finishedCount },
+    { id: 'previsao', label: '🏆 Bracket' },
   ];
   return (
     <View style={tbS.bar}>
@@ -88,7 +90,7 @@ function TabBar({
           activeOpacity={0.75}
         >
           <Text style={[tbS.label, active === id && tbS.labelActive]}>{label}</Text>
-          {count > 0 && (
+          {count !== undefined && count > 0 && (
             <View style={[tbS.badge, live && count > 0 && tbS.badgeLive]}>
               <Text style={[tbS.badgeTxt, live && count > 0 && tbS.badgeTxtLive]}>
                 {count}
@@ -152,6 +154,7 @@ function EmptyState({ tab }: { tab: TabId }): React.JSX.Element {
     open:     { icon: '📅', text: 'Nenhum jogo aberto para palpites no momento.' },
     live:     { icon: '⏳', text: 'Nenhum jogo ao vivo no momento.' },
     finished: { icon: '✅', text: 'Nenhum resultado disponível ainda.' },
+    previsao: { icon: '🏆', text: 'Bracket disponível em breve.' },
   };
   const { icon, text } = msgs[tab];
   return (
@@ -263,10 +266,12 @@ export default function JogosScreen(): React.JSX.Element {
       />
 
       {/* Ranking widget — sempre visível, colapsável */}
-      <RankingWidget refreshKey={rankingKey} />
+      {activeTab !== 'previsao' && <RankingWidget refreshKey={rankingKey} />}
 
-      {/* Conteúdo principal */}
-      {isLoading && !isRefreshing ? (
+      {/* Previsão de Chaveamento */}
+      {activeTab === 'previsao' ? (
+        <PrevisaoChaveamento />
+      ) : isLoading && !isRefreshing ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={Colors.accentGold} />
           <Text style={styles.loadingText}>Carregando jogos...</Text>

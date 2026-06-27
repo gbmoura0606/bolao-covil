@@ -322,7 +322,6 @@ const PHASE_LABEL: Record<Phase, string> = {
 };
 
 type KnockoutRound = 'r32' | 'r16' | 'qf' | 'sf' | 'final' | 'terceiro';
-const KNOCKOUT_ROUNDS: KnockoutRound[] = ['r32', 'r16', 'qf', 'sf', 'final', 'terceiro'];
 const KO_LABEL: Record<KnockoutRound, string> = {
   r32: 'Rodada de 32', r16: 'Oitavas de Final',
   qf: 'Quartas de Final', sf: 'Semifinais',
@@ -785,6 +784,144 @@ const crS = StyleSheet.create({
 
 // ─── MATA-MATA ────────────────────────────────────────────────────────────────
 
+// Largura do card de confronto no bracket
+const BRACKET_CARD_W = 148;
+const BRACKET_COL_GAP = 36; // espaço horizontal entre colunas
+const BRACKET_ROW_GAP = 12; // espaço vertical mínimo entre cards
+
+/** Um card de confronto compacto para uso dentro do bracket visual */
+function BracketCard({
+  match,
+  isAdmin,
+  onMatchSaved,
+  highlighted,
+}: {
+  match: BracketMatch;
+  isAdmin: boolean;
+  onMatchSaved: () => void;
+  highlighted?: boolean;
+}): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  const hasScore = match.homeScore !== null && match.awayScore !== null;
+  const hasPens  = match.homePenalty !== null && match.awayPenalty !== null;
+  const teamsKnown = !!(match.homeTeam && match.awayTeam);
+
+  function TeamRow({ team, slot, score, pen, winner }: {
+    team: BracketMatch['homeTeam'];
+    slot: string | null;
+    score: number | null;
+    pen: number | null;
+    winner: boolean;
+  }): React.JSX.Element {
+    return (
+      <View style={[bkS.teamRow, winner && bkS.teamRowWinner]}>
+        {team
+          ? <FlagImage country={team.country} height={14} />
+          : <View style={bkS.flagPlaceholder} />}
+        <Text style={[bkS.teamName, winner && bkS.teamNameWinner]} numberOfLines={1}>
+          {team ? team.name : (slot ?? 'A definir')}
+        </Text>
+        {score !== null && (
+          <Text style={[bkS.scoreChip, winner && bkS.scoreChipWinner]}>
+            {score}{pen !== null ? `(${pen})` : ''}
+          </Text>
+        )}
+      </View>
+    );
+  }
+
+  // Determina vencedor
+  let homeWin = false;
+  let awayWin = false;
+  if (hasScore) {
+    const hTotal = (match.homeScore ?? 0) + (match.homePenalty !== null ? 0.1 * (match.homePenalty ?? 0) : 0);
+    const aTotal = (match.awayScore ?? 0) + (match.awayPenalty !== null ? 0.1 * (match.awayPenalty ?? 0) : 0);
+    if (match.homePenalty !== null) {
+      homeWin = (match.homePenalty ?? 0) > (match.awayPenalty ?? 0);
+      awayWin = !homeWin;
+    } else {
+      homeWin = hTotal > aTotal;
+      awayWin = aTotal > hTotal;
+    }
+  }
+
+  return (
+    <View>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => setExpanded((v) => !v)}
+        style={[bkS.card, highlighted && bkS.cardHighlighted]}
+      >
+        <View style={bkS.matchNumRow}>
+          <Text style={bkS.matchNum}>J{match.matchNumber}</Text>
+          <View style={[bkS.statusDot, {
+            backgroundColor:
+              match.status === 'FINISHED' ? Colors.error :
+              match.status === 'CLOSED'   ? Colors.accentGold : Colors.success,
+          }]} />
+        </View>
+        <TeamRow
+          team={match.homeTeam}
+          slot={match.homeSlot}
+          score={match.homeScore}
+          pen={match.homePenalty}
+          winner={homeWin}
+        />
+        <View style={bkS.divider} />
+        <TeamRow
+          team={match.awayTeam}
+          slot={match.awaySlot}
+          score={match.awayScore}
+          pen={match.awayPenalty}
+          winner={awayWin}
+        />
+      </TouchableOpacity>
+
+      {/* Painel expandido: data, estádio, admin */}
+      {expanded && (
+        <View style={bkS.expandPanel}>
+          {match.matchDate && (
+            <Text style={bkS.expandMeta}>
+              {fmtDate(match.matchDate)} · {match.matchDate.substring(11, 16)}
+            </Text>
+          )}
+          {match.venue && <Text style={bkS.expandMeta}>{match.venue}</Text>}
+          {isAdmin && teamsKnown && match.status !== 'FINISHED' && (
+            <AdminMatchControls match={match} onSaved={() => { setExpanded(false); onMatchSaved(); }} allowPenalties />
+          )}
+          {!isAdmin && !teamsKnown && (
+            <Text style={bkS.expandMeta}>Times a definir</Text>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** Coluna de confrontos do bracket com rótulo de fase */
+function BracketColumn({
+  round, label, matches, isAdmin, onMatchSaved,
+}: {
+  round: string;
+  label: string;
+  matches: BracketMatch[];
+  isAdmin: boolean;
+  onMatchSaved: () => void;
+}): React.JSX.Element {
+  // Ordena pelo matchNumber para posicionamento correto
+  const sorted = [...matches].sort((a, b) => (a.matchNumber ?? 0) - (b.matchNumber ?? 0));
+  return (
+    <View style={bkS.column}>
+      <Text style={bkS.colLabel}>{label}</Text>
+      <View style={bkS.colCards}>
+        {sorted.map((m) => (
+          <BracketCard key={m.id} match={m} isAdmin={isAdmin} onMatchSaved={onMatchSaved} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function MataMataView({
   bracket, isAdmin, onMatchSaved,
 }: {
@@ -792,120 +929,69 @@ function MataMataView({
   isAdmin: boolean;
   onMatchSaved: () => void;
 }): React.JSX.Element {
-  const [koRound, setKoRound] = useState<KnockoutRound>('r32');
-  const matches = bracket.filter((m) => m.round === koRound);
-  const ridx = KNOCKOUT_ROUNDS.indexOf(koRound);
+  // Agrupa por rodada, preservando ordem de exibição
+  const PHASE_ORDER: KnockoutRound[] = ['r32', 'r16', 'qf', 'sf', 'final', 'terceiro'];
+
+  const columns = PHASE_ORDER
+    .map((r) => ({ round: r, label: KO_LABEL[r], matches: bracket.filter((m) => m.round === r) }))
+    .filter((c) => c.matches.length > 0);
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={mmS.roundNav}>
-        <TouchableOpacity style={mmS.arrow} onPress={() => ridx > 0 && setKoRound(KNOCKOUT_ROUNDS[ridx - 1])} disabled={ridx === 0} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={18} color={ridx > 0 ? Colors.accentGold : Colors.border} />
-        </TouchableOpacity>
-        <Text style={mmS.roundLabel}>{KO_LABEL[koRound]}</Text>
-        <TouchableOpacity style={mmS.arrow} onPress={() => ridx < KNOCKOUT_ROUNDS.length - 1 && setKoRound(KNOCKOUT_ROUNDS[ridx + 1])} disabled={ridx === KNOCKOUT_ROUNDS.length - 1} activeOpacity={0.7}>
-          <Ionicons name="chevron-forward" size={18} color={ridx < KNOCKOUT_ROUNDS.length - 1 ? Colors.accentGold : Colors.border} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={mmS.tabs} contentContainerStyle={{ gap: 6, paddingHorizontal: Spacing.sm, paddingVertical: 6 }}>
-        {KNOCKOUT_ROUNDS.map((r) => (
-          <TouchableOpacity key={r} style={[mmS.tab, r === koRound && mmS.tabActive]} onPress={() => setKoRound(r)} activeOpacity={0.75}>
-            <Text style={[mmS.tabTxt, r === koRound && mmS.tabTxtActive]}>{KO_LABEL[r]}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: Spacing.xxl }} showsVerticalScrollIndicator={false}>
-        {koRound === 'r32' && (
-          <View style={mmS.notice}>
-            <Ionicons name="information-circle-outline" size={13} color={Colors.textSecondary} />
-            <Text style={mmS.noticeTxt}>
-              Os 8 melhores 3os colocados são distribuídos conforme o Anexo C do regulamento FIFA
-              (495 combinações possíveis). Ao encerrar a fase de grupos, cada 3º é alocado ao confronto
-              correto automaticamente. Os resultados são atualizados pela administração.
-            </Text>
-          </View>
-        )}
-
-        <View style={IS_WIDE ? mmS.grid : undefined}>
-          {matches.map((m: BracketMatch) => {
-            const hasScore = m.homeScore !== null && m.awayScore !== null;
-            const hasPens = m.homePenalty !== null && m.awayPenalty !== null;
-            const teamsKnown = !!(m.homeTeam && m.awayTeam);
-            return (
-              <View key={m.id} style={[mmS.card, IS_WIDE && mmS.cardWide]}>
-                <View style={mmS.cardHeader}>
-                  <Text style={mmS.matchNum}>Jogo {m.matchNumber}</Text>
-                  <View style={mmS.headerRight}>
-                    {m.matchDate && (
-                      <Text style={mmS.matchDate}>{fmtDate(m.matchDate)} · {m.matchDate.substring(11, 16)}</Text>
-                    )}
-                    <MatchStatusBadge status={m.status} />
-                  </View>
-                </View>
-                <View style={mmS.matchBody}>
-                  <View style={mmS.slot}>
-                    {m.homeTeam
-                      ? (<><FlagImage country={m.homeTeam.country} height={24} /><Text style={mmS.slotName}>{m.homeTeam.name}</Text></>)
-                      : (<Text style={mmS.slotTbd}>{m.homeSlot}</Text>)}
-                  </View>
-                  <View style={mmS.vs}>
-                    {isAdmin && teamsKnown && m.status !== 'FINISHED' ? (
-                      <AdminMatchControls match={m} onSaved={onMatchSaved} allowPenalties />
-                    ) : hasScore ? (
-                      <>
-                        <Text style={mmS.score}>{m.homeScore} – {m.awayScore}</Text>
-                        {hasPens && <Text style={mmS.penInfo}>{m.homePenalty} – {m.awayPenalty} pên.</Text>}
-                      </>
-                    ) : (
-                      <Text style={mmS.vsText}>×</Text>
-                    )}
-                  </View>
-                  <View style={[mmS.slot, mmS.slotAway]}>
-                    {m.awayTeam
-                      ? (<><FlagImage country={m.awayTeam.country} height={24} /><Text style={mmS.slotName}>{m.awayTeam.name}</Text></>)
-                      : (<Text style={mmS.slotTbd}>{m.awaySlot}</Text>)}
-                  </View>
-                </View>
-                {m.venue && <Text style={mmS.venue}>{m.venue}</Text>}
-              </View>
-            );
-          })}
+      {/* Aviso Rodada de 32 */}
+      {bracket.some((m) => m.round === 'r32') && (
+        <View style={bkS.notice}>
+          <Ionicons name="information-circle-outline" size={13} color={Colors.textSecondary} />
+          <Text style={bkS.noticeTxt}>
+            3os colocados distribuídos pelo Anexo C da FIFA (495 combinações). Toque em qualquer jogo para ver detalhes e data.
+          </Text>
         </View>
+      )}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator
+        style={{ flex: 1 }}
+        contentContainerStyle={bkS.bracketRow}
+      >
+        {columns.map((col) => (
+          <BracketColumn
+            key={col.round}
+            round={col.round}
+            label={col.label}
+            matches={col.matches}
+            isAdmin={isAdmin}
+            onMatchSaved={onMatchSaved}
+          />
+        ))}
       </ScrollView>
     </View>
   );
 }
-const mmS = StyleSheet.create({
-  roundNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm, backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  arrow: { width: 36, alignItems: 'center' },
-  roundLabel: { fontSize: FontSizes.md, fontWeight: FontWeights.bold, color: Colors.textPrimary },
-  tabs: { backgroundColor: Colors.backgroundAlt, maxHeight: 42 },
-  tab: { paddingHorizontal: Spacing.sm, paddingVertical: 5, borderRadius: BorderRadius.sm, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
-  tabActive: { backgroundColor: Colors.accentGold, borderColor: Colors.accentGold },
-  tabTxt: { fontSize: 11, fontWeight: FontWeights.semibold, color: Colors.textSecondary },
-  tabTxtActive: { color: Colors.background },
-  notice: { flexDirection: 'row', gap: 6, alignItems: 'flex-start', margin: Spacing.md, padding: Spacing.sm, backgroundColor: Colors.surface, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.border },
-  noticeTxt: { flex: 1, fontSize: 11, color: Colors.textSecondary, lineHeight: 16 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: Spacing.sm, gap: Spacing.sm },
-  card: { backgroundColor: Colors.surface, marginHorizontal: Spacing.md, marginTop: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadows.sm },
-  cardWide: { width: '47%', marginHorizontal: 0, marginTop: 0 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.backgroundAlt, paddingHorizontal: Spacing.sm, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  matchNum: { fontSize: 10, fontWeight: FontWeights.semibold, color: Colors.accentGold },
-  matchDate: { fontSize: 10, color: Colors.textSecondary },
-  penInfo: { fontSize: 9, color: Colors.textSecondary, fontWeight: FontWeights.semibold, marginTop: 2 },
-  matchBody: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.sm, paddingVertical: Spacing.md },
-  slot: { flex: 1, alignItems: 'center', gap: 4 },
-  slotAway: {},
-  slotFlag: { fontSize: 24 },
-  slotName: { fontSize: 12, fontWeight: FontWeights.semibold, color: Colors.textPrimary, textAlign: 'center' },
-  slotTbd: { fontSize: 11, color: Colors.textSecondary, textAlign: 'center', fontStyle: 'italic', lineHeight: 15 },
-  vs: { minWidth: 104, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  vsText: { fontSize: FontSizes.lg, color: Colors.border, fontWeight: FontWeights.bold },
-  score: { fontSize: FontSizes.lg, fontWeight: FontWeights.bold, color: Colors.accentGold },
-  venue: { fontSize: 10, color: Colors.textSecondary, textAlign: 'center', paddingBottom: Spacing.sm, paddingHorizontal: Spacing.sm },
+
+const bkS = StyleSheet.create({
+  notice: { flexDirection: 'row', gap: 6, alignItems: 'flex-start', margin: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surface, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.border },
+  noticeTxt: { flex: 1, fontSize: 10, color: Colors.textSecondary, lineHeight: 15 },
+  bracketRow: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: Spacing.sm, paddingBottom: Spacing.xxl, paddingTop: Spacing.xs, gap: BRACKET_COL_GAP },
+  column: { width: BRACKET_CARD_W, alignItems: 'stretch' },
+  colLabel: { fontSize: 9, fontWeight: FontWeights.bold, color: Colors.accentGold, textTransform: 'uppercase', letterSpacing: 0.8, textAlign: 'center', marginBottom: Spacing.sm },
+  colCards: { gap: BRACKET_ROW_GAP },
+  // Card
+  card: { backgroundColor: Colors.surface, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadows.sm },
+  cardHighlighted: { borderColor: Colors.accentGold },
+  matchNumRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, paddingTop: 4, paddingBottom: 2 },
+  matchNum: { fontSize: 9, fontWeight: FontWeights.bold, color: Colors.accentGold },
+  statusDot: { width: 5, height: 5, borderRadius: 3 },
+  teamRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 6, paddingVertical: 5 },
+  teamRowWinner: { backgroundColor: 'rgba(245,158,11,0.08)' },
+  teamName: { flex: 1, fontSize: 11, color: Colors.textSecondary, fontWeight: FontWeights.medium },
+  teamNameWinner: { color: Colors.textPrimary, fontWeight: FontWeights.bold },
+  scoreChip: { fontSize: 11, fontWeight: FontWeights.bold, color: Colors.textSecondary, minWidth: 18, textAlign: 'right' },
+  scoreChipWinner: { color: Colors.accentGold },
+  flagPlaceholder: { width: 14, height: 10, backgroundColor: Colors.border, borderRadius: 2 },
+  divider: { height: 1, backgroundColor: Colors.border, marginHorizontal: 6 },
+  // Expand panel
+  expandPanel: { backgroundColor: Colors.backgroundAlt, borderWidth: 1, borderTopWidth: 0, borderColor: Colors.border, borderBottomLeftRadius: BorderRadius.sm, borderBottomRightRadius: BorderRadius.sm, padding: Spacing.sm, gap: 4 },
+  expandMeta: { fontSize: 10, color: Colors.textSecondary, textAlign: 'center' },
 });
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
