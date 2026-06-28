@@ -1,9 +1,15 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthenticatedRequest } from '../middleware/auth';
-import { isBracketLocked } from '../config/bracket';
+import { isBracketLocked, KNOCKOUT_MATCH_COUNT } from '../config/bracket';
+import { buildStandings, type DbMatch } from './standingsController';
+import { computeBracketPoints } from '../config/bracketScoring';
 
 const prisma = new PrismaClient();
+
+function countPicks(picks: Record<string, string | null>): number {
+  return Object.values(picks).filter(Boolean).length;
+}
 
 /**
  * GET /api/bracket-prediction
@@ -48,6 +54,65 @@ export async function getAllBracketPredictions(req: AuthenticatedRequest, res: R
     });
   } catch {
     res.status(500).json({ error: 'Erro ao buscar previsões dos participantes.' });
+  }
+}
+
+/**
+ * GET /api/bracket-prediction/ranking
+ * Ranking específico da Previsão: pontos de cada participante conforme os
+ * resultados oficiais (escala por fase). Não expõe os picks, só os pontos.
+ */
+export async function getBracketRanking(_req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const [preds, matches] = await Promise.all([
+      prisma.bracketPrediction.findMany({ include: { user: { select: { id: true, nickname: true } } } }),
+      prisma.match.findMany({ include: { homeTeam: true, awayTeam: true }, orderBy: { matchDate: 'asc' } }),
+    ]);
+    const { bracket } = buildStandings(matches as DbMatch[]);
+    const ranking = preds
+      .map((bp) => {
+        const picks = bp.picks as Record<string, string | null>;
+        return {
+          userId: bp.userId,
+          nickname: bp.user.nickname,
+          points: computeBracketPoints(picks, bracket).total,
+          done: countPicks(picks),
+        };
+      })
+      .sort((a, b) => b.points - a.points || b.done - a.done || a.nickname.localeCompare(b.nickname));
+    res.json({ ranking });
+  } catch {
+    res.status(500).json({ error: 'Erro ao montar o ranking da previsão.' });
+  }
+}
+
+/**
+ * GET /api/bracket-prediction/admin/status  (gerência)
+ * Situação de preenchimento da Previsão por usuário — inclusive quem ainda não
+ * começou. Não expõe os picks, só a contagem.
+ */
+export async function getBracketAdminStatus(_req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const users = await prisma.user.findMany({
+      select: { id: true, nickname: true, bracketPrediction: { select: { picks: true, updatedAt: true } } },
+      orderBy: { nickname: 'asc' },
+    });
+    res.json({
+      users: users.map((u) => {
+        const picks = (u.bracketPrediction?.picks as Record<string, string | null> | undefined) ?? {};
+        const done = countPicks(picks);
+        return {
+          userId: u.id,
+          nickname: u.nickname,
+          done,
+          total: KNOCKOUT_MATCH_COUNT,
+          complete: done >= KNOCKOUT_MATCH_COUNT,
+          updatedAt: u.bracketPrediction?.updatedAt ?? null,
+        };
+      }),
+    });
+  } catch {
+    res.status(500).json({ error: 'Erro ao buscar a situação das previsões.' });
   }
 }
 

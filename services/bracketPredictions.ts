@@ -30,3 +30,31 @@ export async function getAllBracketPredictions(): Promise<UserBracketPrediction[
   const response = await api.get<{ predictions: UserBracketPrediction[] }>('/api/bracket-prediction/all');
   return response.data.predictions;
 }
+
+export interface BracketRankingEntry {
+  userId: string;
+  nickname: string;
+  points: number;
+  done: number;
+}
+
+/** Ranking específico da Previsão (pontos por fase conforme os resultados). */
+export async function getBracketRanking(): Promise<BracketRankingEntry[]> {
+  const response = await api.get<{ ranking: BracketRankingEntry[] }>('/api/bracket-prediction/ranking');
+  return response.data.ranking;
+}
+
+export interface BracketAdminStatus {
+  userId: string;
+  nickname: string;
+  done: number;
+  total: number;
+  complete: boolean;
+  updatedAt: string | null;
+}
+
+/** Situação de preenchimento da Previsão por usuário (gerência). */
+export async function getBracketAdminStatus(): Promise<BracketAdminStatus[]> {
+  const response = await api.get<{ users: BracketAdminStatus[] }>('/api/bracket-prediction/admin/status');
+  return response.data.users;
+}

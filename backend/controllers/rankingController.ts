@@ -2,6 +2,8 @@ import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import { SCORING } from '../config/scoring';
+import { buildStandings, type DbMatch } from './standingsController';
+import { computeBracketPoints } from '../config/bracketScoring';
 
 const prisma = new PrismaClient();
 
@@ -12,6 +14,8 @@ interface RankingEntry {
   exactMatches: number;
   totalPredictions: number;
   winRate: number;
+  /** Pontos da Previsão de Chaveamento (mata-mata), coluna separada. */
+  bracketPoints?: number;
 }
 
 function buildEntry(user: {
@@ -130,8 +134,22 @@ export async function getLeagueRanking(req: AuthenticatedRequest, res: Response)
       },
     });
 
+    // Pontos da Previsão de Chaveamento por usuário (coluna separada).
+    const [matches, bracketPreds] = await Promise.all([
+      prisma.match.findMany({ include: { homeTeam: true, awayTeam: true }, orderBy: { matchDate: 'asc' } }),
+      prisma.bracketPrediction.findMany(),
+    ]);
+    const { bracket } = buildStandings(matches as DbMatch[]);
+    const bracketByUser = new Map<string, number>();
+    for (const bp of bracketPreds) {
+      bracketByUser.set(bp.userId, computeBracketPoints(bp.picks as Record<string, string | null>, bracket).total);
+    }
+
     const ranking = userLeagues
-      .map(({ user }) => buildLeagueEntry(user, config))
+      .map(({ user }) => ({
+        ...buildLeagueEntry(user, config),
+        bracketPoints: bracketByUser.get(user.id) ?? 0,
+      }))
       .sort((a, b) => b.points - a.points || b.exactMatches - a.exactMatches);
 
     res.json(ranking);

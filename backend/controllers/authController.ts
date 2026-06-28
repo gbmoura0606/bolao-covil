@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import type { AuthenticatedRequest } from '../middleware/auth';
+import { KNOCKOUT_MATCH_COUNT } from '../config/bracket';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET ?? 'bolao-covil-secret-change-in-production';
@@ -118,18 +119,25 @@ export async function listUsersStatus(_req: AuthenticatedRequest, res: Response)
         lastLoginAt: true,
         createdAt: true,
         _count: { select: { predictions: true } },
+        bracketPrediction: { select: { picks: true } },
       },
       orderBy: { nickname: 'asc' },
     });
-    res.json(users.map((u) => ({
-      id: u.id,
-      nickname: u.nickname,
-      passwordChanged: !u.mustChangePassword,
-      canAccessGerencia: u.canAccessGerencia,
-      lastLoginAt: u.lastLoginAt,
-      predictionCount: u._count.predictions,
-      createdAt: u.createdAt,
-    })));
+    res.json(users.map((u) => {
+      const picks = (u.bracketPrediction?.picks as Record<string, string | null> | undefined) ?? {};
+      const bracketDone = Object.values(picks).filter(Boolean).length;
+      return {
+        id: u.id,
+        nickname: u.nickname,
+        passwordChanged: !u.mustChangePassword,
+        canAccessGerencia: u.canAccessGerencia,
+        lastLoginAt: u.lastLoginAt,
+        predictionCount: u._count.predictions,
+        bracketDone,
+        bracketComplete: bracketDone >= KNOCKOUT_MATCH_COUNT,
+        createdAt: u.createdAt,
+      };
+    }));
   } catch {
     res.status(500).json({ error: 'Erro ao listar usuários.' });
   }
