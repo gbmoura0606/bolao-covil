@@ -13,6 +13,7 @@ import {
   buildBracketLayout, CW, CH, PAD, COL_ORDER, COL_LABELS, type LineSegment,
 } from '@/components/bracketLayout';
 import { BracketCanvas } from '@/components/BracketCanvas';
+import { isBracketLocked, BRACKET_LOCK_LABEL } from '@/constants/bracket';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -56,7 +57,7 @@ function resolveTeam(
 // ── Card de previsão ──────────────────────────────────────────────────────────
 
 function PredCard({
-  match, picks, byExtId, allMatches, onPick, cardStyle,
+  match, picks, byExtId, allMatches, onPick, cardStyle, locked = false,
 }: {
   match: BracketMatch;
   picks: BracketPicks;
@@ -64,13 +65,14 @@ function PredCard({
   allMatches: BracketMatch[];
   onPick: (matchId: string, teamId: string | null) => void;
   cardStyle?: object;
+  locked?: boolean;
 }): React.JSX.Element {
   const homeTeam = resolveTeam(match, 'home', picks, byExtId);
   const awayTeam = resolveTeam(match, 'away', picks, byExtId);
   const pickedId = picks[match.id] ?? null;
 
   function handleTap(team: TeamInfo | null): void {
-    if (!team) return;
+    if (!team || locked) return;
     onPick(match.id, pickedId === team.id ? null : team.id);
   }
 
@@ -79,8 +81,8 @@ function PredCard({
     const looser  = !!team && pickedId !== null && pickedId !== team.id;
     return (
       <TouchableOpacity
-        activeOpacity={team ? 0.7 : 1}
-        disabled={!team}
+        activeOpacity={team && !locked ? 0.7 : 1}
+        disabled={!team || locked}
         onPress={() => handleTap(team)}
         style={[pcS.slot, picked && pcS.slotPicked, looser && pcS.slotLooser, !team && pcS.slotEmpty]}
       >
@@ -155,6 +157,7 @@ export function PrevisaoChaveamento(): React.JSX.Element {
   const [error,     setError]     = useState('');
   const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestPicks  = useRef<BracketPicks>({});
+  const locked = isBracketLocked();
 
   const loadAll = useCallback(async () => {
     setLoading(true); setError('');
@@ -194,6 +197,7 @@ export function PrevisaoChaveamento(): React.JSX.Element {
   }, [bracket]);
 
   function handlePick(matchId: string, teamId: string | null): void {
+    if (locked) return;
     const newPicks = { ...latestPicks.current };
 
     // Invalida picks downstream
@@ -252,18 +256,28 @@ export function PrevisaoChaveamento(): React.JSX.Element {
       <View style={pS.bar}>
         <Text style={pS.progress}>{done}/{total} escolhas</Text>
         <View style={pS.saveRow}>
-          {saveState === 'saving' && (
-            <><ActivityIndicator size={10} color={Colors.textSecondary} /><Text style={pS.saveTxt}> Salvando...</Text></>
-          )}
-          {saveState === 'saved' && (
-            <><Ionicons name="checkmark-circle" size={12} color={Colors.success} /><Text style={[pS.saveTxt,{color:Colors.success}]}> Salvo ✓</Text></>
-          )}
-          {saveState === 'error' && (
-            <><Ionicons name="alert-circle" size={12} color={Colors.error} /><Text style={[pS.saveTxt,{color:Colors.error}]}> Erro ao salvar</Text></>
+          {locked ? (
+            <><Ionicons name="lock-closed" size={12} color={Colors.textSecondary} /><Text style={pS.saveTxt}> Previsão encerrada</Text></>
+          ) : (
+            <>
+              {saveState === 'saving' && (
+                <><ActivityIndicator size={10} color={Colors.textSecondary} /><Text style={pS.saveTxt}> Salvando...</Text></>
+              )}
+              {saveState === 'saved' && (
+                <><Ionicons name="checkmark-circle" size={12} color={Colors.success} /><Text style={[pS.saveTxt,{color:Colors.success}]}> Salvo ✓</Text></>
+              )}
+              {saveState === 'error' && (
+                <><Ionicons name="alert-circle" size={12} color={Colors.error} /><Text style={[pS.saveTxt,{color:Colors.error}]}> Erro ao salvar</Text></>
+              )}
+            </>
           )}
         </View>
       </View>
-      <Text style={pS.hint}>Toque em uma seleção para avançá-la. Toque novamente para desfazer.</Text>
+      <Text style={pS.hint}>
+        {locked
+          ? `Previsão encerrada (mata-mata começou em ${BRACKET_LOCK_LABEL}). Suas escolhas estão salvas.`
+          : 'Toque em uma seleção para avançá-la. Toque novamente para desfazer.'}
+      </Text>
 
       {/* Canvas: rolagem vertical única no PC (largura total), pan livre no celular */}
       <BracketCanvas canvasW={canvasW} totalH={totalH} onWidth={setAvailW}>
@@ -288,6 +302,7 @@ export function PrevisaoChaveamento(): React.JSX.Element {
             byExtId={byExtId}
             allMatches={bracket}
             onPick={handlePick}
+            locked={locked}
             cardStyle={{ position: 'absolute', left: c.x, top: c.y, width: CW }}
           />
         ))}
@@ -304,6 +319,7 @@ export function PrevisaoChaveamento(): React.JSX.Element {
               byExtId={byExtId}
               allMatches={bracket}
               onPick={handlePick}
+              locked={locked}
               cardStyle={{ width: CW }}
             />
           </View>
