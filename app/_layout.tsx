@@ -25,6 +25,7 @@ export default function RootLayout(): React.JSX.Element {
         <Stack.Screen name="login" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="liga-ranking" />
+        <Stack.Screen name="previsoes-admin" />
         <Stack.Screen name="change-password" />
         <Stack.Screen name="login-gerencia" />
         <Stack.Screen name="gerencia" />

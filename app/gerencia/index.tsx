@@ -290,13 +290,6 @@ export default function GerenciaHomeScreen(): React.JSX.Element {
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.logoutBtn}
-            onPress={() => router.push('/gerencia/previsoes')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="git-network-outline" size={22} color="#60A5FA" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.logoutBtn}
             onPress={() => router.push('/gerencia/usuarios')}
             activeOpacity={0.7}
           >

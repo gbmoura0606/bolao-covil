@@ -49,6 +49,12 @@ export default function ConfiguracoesScreen(): React.JSX.Element {
     ...(canAccessGerencia
       ? [
           {
+            id: 'bracketStatus',
+            label: 'Previsões do Bolão',
+            icon: 'git-network-outline' as IoniconName,
+            onPress: () => router.push('/previsoes-admin'),
+          },
+          {
             id: 'users',
             label: 'Usuários do Bolão',
             icon: 'people-outline' as IoniconName,
