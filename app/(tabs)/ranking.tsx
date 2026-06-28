@@ -815,20 +815,32 @@ function BracketCard({
   // Edição inline do placar (caixinhas ao lado de cada time) com autosave.
   const [h, setH] = useState(match.homeScore?.toString() ?? '');
   const [a, setA] = useState(match.awayScore?.toString() ?? '');
+  const [hp, setHp] = useState(match.homePenalty?.toString() ?? '');
+  const [ap, setAp] = useState(match.awayPenalty?.toString() ?? '');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     setH(match.homeScore?.toString() ?? '');
     setA(match.awayScore?.toString() ?? '');
-  }, [match.homeScore, match.awayScore]);
+    setHp(match.homePenalty?.toString() ?? '');
+    setAp(match.awayPenalty?.toString() ?? '');
+  }, [match.homeScore, match.awayScore, match.homePenalty, match.awayPenalty]);
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
-  function scheduleSave(nh: string, na: string): void {
+  const typedDraw = h !== '' && a !== '' && h === a;
+
+  function scheduleSave(nh: string, na: string, nhp: string, nap: string): void {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (nh === '' || na === '') return;
+    const draw = nh === na;
+    const body: { homeScore: number; awayScore: number; homePenalty: number | null; awayPenalty: number | null } = {
+      homeScore: parseInt(nh, 10),
+      awayScore: parseInt(na, 10),
+      // Pênaltis só no empate; fora do empate, limpa qualquer valor antigo.
+      homePenalty: draw && nhp !== '' && nap !== '' ? parseInt(nhp, 10) : null,
+      awayPenalty: draw && nhp !== '' && nap !== '' ? parseInt(nap, 10) : null,
+    };
     saveTimer.current = setTimeout(() => {
-      void patchMatchScore(match.id, { homeScore: parseInt(nh, 10), awayScore: parseInt(na, 10) })
-        .then(onMatchSaved)
-        .catch(() => {});
+      void patchMatchScore(match.id, body).then(onMatchSaved).catch(() => {});
     }, 900);
   }
 
@@ -861,7 +873,7 @@ function BracketCard({
             onChangeText={(t) => {
               const clean = t.replace(/[^0-9]/g, '').slice(0, 2);
               setVal(clean);
-              scheduleSave(side === 'home' ? clean : h, side === 'home' ? a : clean);
+              scheduleSave(side === 'home' ? clean : h, side === 'home' ? a : clean, hp, ap);
             }}
             keyboardType="number-pad"
             maxLength={2}
@@ -892,6 +904,26 @@ function BracketCard({
       <View style={bkS.divider} />
       <TeamRow side="away" />
 
+      {/* Pênaltis: caixinha secundária só quando o tempo normal termina empatado */}
+      {editable && typedDraw && (
+        <View style={bkS.penRowInline}>
+          <Text style={bkS.penLbl}>Pênaltis</Text>
+          <TextInput
+            style={[bkS.scoreInput, hp !== '' && bkS.scoreInputFilled]}
+            value={hp}
+            onChangeText={(t) => { const c = t.replace(/[^0-9]/g, '').slice(0, 2); setHp(c); scheduleSave(h, a, c, ap); }}
+            keyboardType="number-pad" maxLength={2} placeholder="–" placeholderTextColor={Colors.border} selectTextOnFocus
+          />
+          <Text style={bkS.penSep}>×</Text>
+          <TextInput
+            style={[bkS.scoreInput, ap !== '' && bkS.scoreInputFilled]}
+            value={ap}
+            onChangeText={(t) => { const c = t.replace(/[^0-9]/g, '').slice(0, 2); setAp(c); scheduleSave(h, a, hp, c); }}
+            keyboardType="number-pad" maxLength={2} placeholder="–" placeholderTextColor={Colors.border} selectTextOnFocus
+          />
+        </View>
+      )}
+
       {expanded && (
         <View style={bkS.panel}>
           {match.matchDate && (
@@ -904,7 +936,6 @@ function BracketCard({
             <AdminMatchControls
               match={match}
               onSaved={() => { setExpanded(false); onMatchSaved(); }}
-              allowPenalties
               hideScoreInputs
             />
           )}
@@ -1051,6 +1082,12 @@ const bkS = StyleSheet.create({
     fontSize: 12, fontWeight: FontWeights.bold, padding: 0,
   },
   scoreInputFilled: { borderColor: '#3B82F6' },
+  penRowInline: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+    gap: 5, paddingHorizontal: 6, paddingBottom: 5,
+  },
+  penLbl: { fontSize: 9, color: Colors.textSecondary, fontWeight: FontWeights.bold, textTransform: 'uppercase', marginRight: 2 },
+  penSep: { fontSize: 11, color: Colors.textSecondary, fontWeight: FontWeights.bold },
   scoreText: { fontSize: 11, fontWeight: FontWeights.bold, color: Colors.textSecondary },
   scoreTextW: { color: Colors.background },
   flagPh: { width: 13, height: 9, backgroundColor: Colors.border, borderRadius: 2 },

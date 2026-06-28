@@ -34,22 +34,20 @@ function resolveTeam(
   const slot    = side === 'home' ? match.homeSlot : match.awaySlot;
   const srcExt  = extIdFromSlot(slot);
   if (!srcExt) return null;
+  // "Perdedor M.." (disputa de 3º lugar) → devolve quem o usuário NÃO escolheu.
+  const isLoser = !!slot && slot.startsWith('Perdedor');
   const srcMatch = byExtId.get(srcExt);
   if (!srcMatch) return null;
 
   const pickedId = picks[srcMatch.id];
   if (!pickedId) return null;
 
-  // Tenta resolver o time diretamente
-  if (srcMatch.homeTeam?.id === pickedId) return srcMatch.homeTeam;
-  if (srcMatch.awayTeam?.id === pickedId) return srcMatch.awayTeam;
-
-  // Resolve recursivamente
-  const h = resolveTeam(srcMatch, 'home', picks, byExtId);
-  const a = resolveTeam(srcMatch, 'away', picks, byExtId);
-  if (h?.id === pickedId) return h;
-  if (a?.id === pickedId) return a;
-  return null;
+  // Os dois participantes do jogo-fonte (recursivamente, se preciso).
+  const h = srcMatch.homeTeam ?? resolveTeam(srcMatch, 'home', picks, byExtId);
+  const a = srcMatch.awayTeam ?? resolveTeam(srcMatch, 'away', picks, byExtId);
+  const winner = h?.id === pickedId ? h : a?.id === pickedId ? a : null;
+  const loser  = h?.id === pickedId ? a : a?.id === pickedId ? h : null;
+  return isLoser ? loser : winner;
 }
 
 // Layout do chaveamento (dimensões, ordem da árvore e linhas) vem de

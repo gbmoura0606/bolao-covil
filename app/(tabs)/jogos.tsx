@@ -265,8 +265,8 @@ export default function JogosScreen(): React.JSX.Element {
         finishedCount={finishedCount}
       />
 
-      {/* Ranking widget — sempre visível, colapsável */}
-      {activeTab !== 'previsao' && <RankingWidget refreshKey={rankingKey} />}
+      {/* Ranking widget — sempre visível, colapsável (inclusive na Previsão) */}
+      <RankingWidget refreshKey={rankingKey} />
 
       {/* Previsão de Chaveamento */}
       {activeTab === 'previsao' ? (
