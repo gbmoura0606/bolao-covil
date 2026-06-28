@@ -106,7 +106,10 @@ export function buildBracketLayout(
   const slotH = ch + 14;
   const maxSlots = 16; // a R32 define a altura total
   const totalH = maxSlots * slotH;
-  const canvasH = LABEL_H + PAD + totalH + PAD;
+  // Os rótulos de fase agora vivem numa FAIXA FIXA (sticky) fora do corpo
+  // rolável (ver BracketCanvas). Por isso o corpo não reserva mais LABEL_H no
+  // topo — os cards começam logo após o PAD.
+  const canvasH = PAD + totalH + PAD;
 
   const cols = COL_ORDER.length;
   const baseW = PAD + cols * (CW + CGAP) + PAD;
@@ -128,8 +131,8 @@ export function buildBracketLayout(
     const groupSize = maxSlots / slots;
     const topSlot = slotIdx * groupSize;
     const botSlot = topSlot + groupSize - 1;
-    const topY = LABEL_H + PAD + topSlot * slotH + ch / 2;
-    const botY = LABEL_H + PAD + botSlot * slotH + ch / 2;
+    const topY = PAD + topSlot * slotH + ch / 2;
+    const botY = PAD + botSlot * slotH + ch / 2;
     return (topY + botY) / 2;
   }
 

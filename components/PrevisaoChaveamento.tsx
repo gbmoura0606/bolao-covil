@@ -10,7 +10,7 @@ import type { BracketMatch, TeamInfo } from '@/services/standings';
 import type { BracketPicks } from '@/services/bracketPredictions';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '@/constants/theme';
 import {
-  buildBracketLayout, CW, CH, PAD, COL_ORDER, COL_LABELS, type LineSegment,
+  buildBracketLayout, CW, CH, COL_ORDER, COL_LABELS, type LineSegment,
 } from '@/components/bracketLayout';
 import { BracketCanvas } from '@/components/BracketCanvas';
 import { isBracketLocked, BRACKET_LOCK_LABEL } from '@/constants/bracket';
@@ -149,7 +149,7 @@ function Lines({ lines }: { lines: LineSegment[] }): React.JSX.Element {
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 const DEBOUNCE_MS = 1500;
 
-export function PrevisaoChaveamento(): React.JSX.Element {
+export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number) => void } = {}): React.JSX.Element {
   const [bracket,   setBracket]   = useState<BracketMatch[]>([]);
   const [picks,     setPicks]     = useState<BracketPicks>({});
   const [loading,   setLoading]   = useState(true);
@@ -177,6 +177,11 @@ export function PrevisaoChaveamento(): React.JSX.Element {
     void loadAll();
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [loadAll]);
+
+  // Informa o nº de escolhas ao pai (ícone de atenção na aba Previsão).
+  useEffect(() => {
+    onProgress?.(Object.values(picks).filter(Boolean).length);
+  }, [picks, onProgress]);
 
   function triggerSave(newPicks: BracketPicks): void {
     latestPicks.current = newPicks;
@@ -229,7 +234,8 @@ export function PrevisaoChaveamento(): React.JSX.Element {
   const totalH = canvasH + (thirdCard ? CH + 52 : 0);
 
   const done  = Object.values(picks).filter(Boolean).length;
-  const total = bracket.filter(m => m.round !== 'terceiro').length;
+  // 32 jogos do mata-mata = R32(16)+Oitavas(8)+Quartas(4)+Semis(2)+3º(1)+Final(1).
+  const total = bracket.length;
 
   if (loading) {
     return (
@@ -273,23 +279,38 @@ export function PrevisaoChaveamento(): React.JSX.Element {
           )}
         </View>
       </View>
-      <Text style={pS.hint}>
-        {locked
-          ? `Previsão encerrada (mata-mata começou em ${BRACKET_LOCK_LABEL}). Suas escolhas estão salvas.`
-          : 'Toque em uma seleção para avançá-la. Toque novamente para desfazer.'}
-      </Text>
+      {locked ? (
+        <Text style={pS.hint}>
+          {`Previsão encerrada (mata-mata começou em ${BRACKET_LOCK_LABEL}). Suas escolhas estão salvas.`}
+        </Text>
+      ) : done < total ? (
+        <View style={pS.warnBanner}>
+          <Ionicons name="alert-circle" size={16} color={Colors.accentGold} />
+          <Text style={pS.warnTxt}>
+            <Text style={pS.warnStrong}>Faça sua previsão!</Text> Faltam {total - done} de {total}.
+            Toque em uma seleção para avançá-la fase a fase até a final (e a disputa de 3º lugar).
+            Salva automaticamente. Encerra em {BRACKET_LOCK_LABEL}.
+          </Text>
+        </View>
+      ) : (
+        <Text style={pS.hint}>
+          Previsão completa ✓ — você ainda pode ajustá-la até {BRACKET_LOCK_LABEL}.
+        </Text>
+      )}
 
-      {/* Canvas: rolagem vertical única no PC (largura total), pan livre no celular */}
-      <BracketCanvas canvasW={canvasW} totalH={totalH} onWidth={setAvailW}>
-        {/* Labels */}
-        {COL_ORDER.map((round, idx) => bracket.some(m => m.round === round) && (
+      {/* Canvas: faixa de títulos fixa + zoom (ver BracketCanvas) */}
+      <BracketCanvas
+        canvasW={canvasW}
+        bodyH={totalH}
+        onWidth={setAvailW}
+        labels={COL_ORDER.map((round, idx) => bracket.some(m => m.round === round) && (
           <Text key={round} style={[pS.colLabel, {
-            position: 'absolute', left: colXs[idx], top: PAD, width: CW, textAlign: 'center',
+            position: 'absolute', left: colXs[idx], top: 14, width: CW, textAlign: 'center',
           }]}>
             {COL_LABELS[round]}
           </Text>
         ))}
-
+      >
         {/* Linhas */}
         <Lines lines={lines} />
 
@@ -348,6 +369,15 @@ const pS = StyleSheet.create({
     fontSize: 10, color: Colors.textSecondary, textAlign: 'center',
     paddingHorizontal: Spacing.md, paddingVertical: 6,
   },
+  warnBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 6,
+    marginHorizontal: Spacing.md, marginVertical: 6,
+    paddingHorizontal: Spacing.sm, paddingVertical: 8,
+    backgroundColor: 'rgba(245,158,11,0.10)',
+    borderWidth: 1, borderColor: Colors.accentGold, borderRadius: BorderRadius.md,
+  },
+  warnTxt: { flex: 1, fontSize: 11, color: Colors.textPrimary, lineHeight: 16 },
+  warnStrong: { fontWeight: FontWeights.bold, color: Colors.accentGold },
   colLabel: {
     fontSize: 9, fontWeight: FontWeights.bold, color: Colors.accentGold,
     textTransform: 'uppercase', letterSpacing: 0.8,
