@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { MatchCard } from '@/components/MatchCard';
 import { RankingWidget } from '@/components/RankingWidget';
@@ -16,6 +17,8 @@ import { PrevisaoChaveamento } from '@/components/PrevisaoChaveamento';
 import { usePredictions } from '@/hooks/usePredictions';
 import { useAuth } from '@/hooks/useAuth';
 import { getMatches } from '@/services/matches';
+import { getBracketPrediction } from '@/services/bracketPredictions';
+import { isBracketLocked, KNOCKOUT_MATCH_COUNT } from '@/constants/bracket';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius } from '@/constants/theme';
 import type { Match } from '@/types';
 
@@ -67,22 +70,25 @@ function buildSections(matches: Match[], reverse = false): MatchSection[] {
 function TabBar({
   active, onChange,
   openCount, liveCount, finishedCount,
+  previsaoAlert = false,
 }: {
   active: TabId;
   onChange: (t: TabId) => void;
   openCount: number;
   liveCount: number;
   finishedCount: number;
+  /** Mostra um ícone de atenção na aba Previsão (previsão incompleta). */
+  previsaoAlert?: boolean;
 }): React.JSX.Element {
-  const tabs: { id: TabId; label: string; count?: number; live?: boolean }[] = [
+  const tabs: { id: TabId; label: string; count?: number; live?: boolean; alert?: boolean }[] = [
     { id: 'open',     label: 'Próximos',   count: openCount },
     { id: 'live',     label: 'Ao Vivo',    count: liveCount, live: true },
     { id: 'finished', label: 'Resultados', count: finishedCount },
-    { id: 'previsao', label: 'Previsão' },
+    { id: 'previsao', label: 'Previsão', alert: previsaoAlert },
   ];
   return (
     <View style={tbS.bar}>
-      {tabs.map(({ id, label, count, live }) => (
+      {tabs.map(({ id, label, count, live, alert }) => (
         <TouchableOpacity
           key={id}
           style={[tbS.tab, active === id && tbS.tabActive]}
@@ -90,6 +96,9 @@ function TabBar({
           activeOpacity={0.75}
         >
           <Text style={[tbS.label, active === id && tbS.labelActive]}>{label}</Text>
+          {alert && (
+            <Ionicons name="alert-circle" size={14} color={Colors.accentGold} />
+          )}
           {count !== undefined && count > 0 && (
             <View style={[tbS.badge, live && count > 0 && tbS.badgeLive]}>
               <Text style={[tbS.badgeTxt, live && count > 0 && tbS.badgeTxtLive]}>
@@ -180,6 +189,9 @@ export default function JogosScreen(): React.JSX.Element {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<TabId>('open');
   const [rankingKey, setRankingKey] = useState(0);
+  // Progresso da Previsão (nº de escolhas) — alimenta o ícone de atenção na aba.
+  const [bracketDone, setBracketDone] = useState<number | null>(null);
+  const bracketLocked = isBracketLocked();
 
   const { user } = useAuth();
   const { predictions, updateScore, retryPrediction, refreshPredictions } = usePredictions();
@@ -208,6 +220,19 @@ export default function JogosScreen(): React.JSX.Element {
   useEffect(() => {
     void loadMatches();
   }, [loadMatches]);
+
+  // Carga inicial do progresso da Previsão (para o ícone de atenção na aba),
+  // mesmo que o usuário ainda não tenha aberto a aba.
+  useEffect(() => {
+    let alive = true;
+    getBracketPrediction()
+      .then(({ picks }) => { if (alive) setBracketDone(Object.values(picks ?? {}).filter(Boolean).length); })
+      .catch(() => { /* silencioso: sem badge se falhar */ });
+    return () => { alive = false; };
+  }, []);
+
+  // Previsão incompleta e ainda editável → sinaliza atenção na aba.
+  const previsaoAlert = !bracketLocked && bracketDone !== null && bracketDone < KNOCKOUT_MATCH_COUNT;
 
   // Polling automático: 15s se houver jogo ao vivo, 30s caso contrário
   useEffect(() => {
@@ -263,6 +288,7 @@ export default function JogosScreen(): React.JSX.Element {
         openCount={openCount}
         liveCount={liveCount}
         finishedCount={finishedCount}
+        previsaoAlert={previsaoAlert}
       />
 
       {/* Ranking widget — sempre visível, colapsável (inclusive na Previsão) */}
@@ -270,7 +296,7 @@ export default function JogosScreen(): React.JSX.Element {
 
       {/* Previsão de Chaveamento */}
       {activeTab === 'previsao' ? (
-        <PrevisaoChaveamento />
+        <PrevisaoChaveamento onProgress={setBracketDone} />
       ) : isLoading && !isRefreshing ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={Colors.accentGold} />
