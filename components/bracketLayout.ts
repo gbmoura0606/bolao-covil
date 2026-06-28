@@ -11,7 +11,7 @@
 import type { BracketMatch } from '@/services/standings';
 
 // ── Dimensões do canvas ─────────────────────────────────────────────────────
-export const CW = 160;        // largura do card
+export const CW = 176;        // largura do card
 export const CH = 76;         // altura do card (cabeçalho + 2 times com placar)
 export const CGAP = 52;       // espaço horizontal entre colunas
 export const PAD = 20;        // padding externo do canvas
@@ -88,16 +88,24 @@ export const SLOT_INDEX: Record<string, number> = computeSlotIndex();
 export interface CardLayout { x: number; y: number; match: BracketMatch; }
 export interface LineSegment { x1: number; y1: number; x2: number; y2: number; xMid: number; }
 
-export function buildBracketLayout(bracket: BracketMatch[], opts?: { width?: number }): {
+export function buildBracketLayout(
+  bracket: BracketMatch[],
+  opts?: { width?: number; cardHeight?: number },
+): {
   cards: CardLayout[];
   lines: LineSegment[];
   thirdCard: CardLayout | null;
   canvasW: number;
   canvasH: number;
   colXs: number[];
+  cardH: number;
 } {
+  // Altura do card pode ser maior (ex.: admin com controles inline) — o
+  // espaçamento dos slots cresce junto para nada ficar sobreposto.
+  const ch = opts?.cardHeight ?? CH;
+  const slotH = ch + 14;
   const maxSlots = 16; // a R32 define a altura total
-  const totalH = maxSlots * SLOT_H;
+  const totalH = maxSlots * slotH;
   const canvasH = LABEL_H + PAD + totalH + PAD;
 
   const cols = COL_ORDER.length;
@@ -120,8 +128,8 @@ export function buildBracketLayout(bracket: BracketMatch[], opts?: { width?: num
     const groupSize = maxSlots / slots;
     const topSlot = slotIdx * groupSize;
     const botSlot = topSlot + groupSize - 1;
-    const topY = LABEL_H + PAD + topSlot * SLOT_H + CH / 2;
-    const botY = LABEL_H + PAD + botSlot * SLOT_H + CH / 2;
+    const topY = LABEL_H + PAD + topSlot * slotH + ch / 2;
+    const botY = LABEL_H + PAD + botSlot * slotH + ch / 2;
     return (topY + botY) / 2;
   }
 
@@ -135,7 +143,7 @@ export function buildBracketLayout(bracket: BracketMatch[], opts?: { width?: num
     const colIdx = COL_ORDER.indexOf(m.round as MainRound);
     if (colIdx < 0) continue;
     const cy = centerY(m.round, slotIdx);
-    const layout: CardLayout = { x: colX(colIdx), y: cy - CH / 2, match: m };
+    const layout: CardLayout = { x: colX(colIdx), y: cy - ch / 2, match: m };
     cards.push(layout);
     byExtId.set(extId, layout);
   }
@@ -145,7 +153,7 @@ export function buildBracketLayout(bracket: BracketMatch[], opts?: { width?: num
   const thirdMatch = bracket.find((m) => m.round === 'terceiro');
   const finalCard = cards.find((c) => c.match.round === 'final');
   if (thirdMatch) {
-    const thirdY = finalCard ? finalCard.y + CH + 32 : centerY('sf', 0);
+    const thirdY = finalCard ? finalCard.y + ch + 32 : centerY('sf', 0);
     thirdCard = { x: colX(COL_ORDER.indexOf('final')), y: thirdY, match: thirdMatch };
   }
 
@@ -155,10 +163,10 @@ export function buildBracketLayout(bracket: BracketMatch[], opts?: { width?: num
     const src = byExtId.get(srcExtId);
     if (!src) return;
     const x1 = src.x + CW;
-    const y1 = src.y + CH / 2;
+    const y1 = src.y + ch / 2;
     const x2 = dst.x;
-    const y2 = side === 'top' ? dst.y + CH * 0.27 : dst.y + CH * 0.73;
-    lines.push({ x1, y1, x2, y2, xMid: x1 + CGAP / 2 });
+    const y2 = side === 'top' ? dst.y + ch * 0.27 : dst.y + ch * 0.73;
+    lines.push({ x1, y1, x2, y2, xMid: x1 + gap / 2 });
   }
 
   for (const [src, dst, side] of FEEDS) {
@@ -170,12 +178,12 @@ export function buildBracketLayout(bracket: BracketMatch[], opts?: { width?: num
       const srcL = byExtId.get(src);
       if (!srcL) continue;
       const x1 = srcL.x + CW;
-      const y1 = srcL.y + CH / 2;
+      const y1 = srcL.y + ch / 2;
       const x2 = thirdCard.x;
-      const y2 = side === 'top' ? thirdCard.y + CH * 0.27 : thirdCard.y + CH * 0.73;
-      lines.push({ x1, y1, x2, y2, xMid: x1 + CGAP / 2 });
+      const y2 = side === 'top' ? thirdCard.y + ch * 0.27 : thirdCard.y + ch * 0.73;
+      lines.push({ x1, y1, x2, y2, xMid: x1 + gap / 2 });
     }
   }
 
-  return { cards, lines, thirdCard, canvasW, canvasH, colXs };
+  return { cards, lines, thirdCard, canvasW, canvasH, colXs, cardH: ch };
 }

@@ -93,3 +93,30 @@ Schema: `backend/prisma/schema.prisma`. Deploy aplica schema via `prisma db push
 - **Preview**: qualquer branch/PR → Vercel gera URL de preview automaticamente
 - **Backend**: push na `main` → Railway (build em `backend/`, ver `railway.json`)
 - **Build web**: `npx expo export --platform web` → pasta `dist/`
+
+---
+
+## Previsão de chaveamento (mata-mata) — estado e TODO
+
+**Já implementado:**
+- Modelo `BracketPrediction` (1 por usuário, `picks` JSON `{ [matchId]: teamId|null }`).
+- Tela `components/PrevisaoChaveamento.tsx` (aba **Palpites › Previsão**): canvas do
+  bracket; usuário escolhe quem avança até a final; autosave; resolve 3º lugar
+  (perdedores das semis). Layout em `components/bracketLayout.ts` (ordem da árvore),
+  canvas responsivo em `components/BracketCanvas.tsx`.
+- **Trava**: `constants/bracket.ts` (front) e `backend/config/bracket.ts` (back) —
+  `28/06/2026 16h BRT = 19h UTC` (início do M73). Depois disso `PUT /api/bracket-prediction`
+  responde 403 e a tela fica somente-leitura.
+- Rodada de 32 aberta nos **palpites** de placar: `matchesController.listMatches`
+  resolve os times do mata-mata via `buildStandings` (mesmo fluxo dos grupos).
+
+**TODO — pontuação da Previsão (próxima sessão):**
+- Pontuação por **acerto de quem avança em cada confronto**, escalando por fase
+  (confirmado pelo dono): **R32 +1 · Oitavas +2 · Quartas +3 · Semi +4 · 3º +4 · Final/Campeão +5**.
+  Comparar `picks[matchId]` com o vencedor real (do `bracket` resolvido em `buildStandings`).
+- Backend: função `computeBracketPoints(picks, bracket)` + expor pontos por usuário.
+- UI: pontos **acima de cada confronto** na Previsão (ao vivo conforme resultados).
+- **Ranking parcial específico da Previsão** (hoje a aba mostra o ranking de palpites geral).
+- **Coluna "Previsão"** no ranking da Liga (`rankingController.getLeagueRanking` + `app/liga-ranking.tsx`).
+- "Ver palpites do grupo" por confronto (quem cada um previu) — novo endpoint de agregação.
+- Testes em `backend/test/` cobrindo a pontuação por fase.

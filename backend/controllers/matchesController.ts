@@ -3,6 +3,7 @@ import { PrismaClient, MatchStatus } from '@prisma/client';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import { computePoints } from '../config/scoring';
 import { hasKickedOff } from '../config/time';
+import { buildStandings, type DbMatch } from './standingsController';
 
 const prisma = new PrismaClient();
 
@@ -14,7 +15,21 @@ export async function listMatches(_req: AuthenticatedRequest, res: Response): Pr
       include: matchInclude,
       orderBy: { matchDate: 'asc' },
     });
-    res.json(matches);
+
+    // Resolve os times do mata-mata (saem das fases anteriores) para que os
+    // confrontos já definidos (ex.: Rodada de 32) apareçam nos palpites com os
+    // times preenchidos, seguindo o mesmo fluxo da fase de grupos.
+    const { bracket } = buildStandings(matches as unknown as DbMatch[]);
+    const resolved = new Map(bracket.map((b) => [b.id, b]));
+    const out = matches.map((m) => {
+      if (m.group === null && (!m.homeTeam || !m.awayTeam)) {
+        const r = resolved.get(m.id);
+        if (r) return { ...m, homeTeam: m.homeTeam ?? r.homeTeam, awayTeam: m.awayTeam ?? r.awayTeam };
+      }
+      return m;
+    });
+
+    res.json(out);
   } catch {
     res.status(500).json({ error: 'Erro ao buscar partidas.' });
   }

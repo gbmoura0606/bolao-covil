@@ -55,6 +55,7 @@ function AdminMatchControls({
   onSaved,
   allowPenalties = false,
   hideScoreInputs = false,
+  penaltiesAlwaysVisible = false,
 }: {
   match: EditableMatch;
   onSaved: () => void;
@@ -62,6 +63,8 @@ function AdminMatchControls({
   allowPenalties?: boolean;
   /** Quando o placar é editado fora (caixinhas inline), oculta os inputs de gols aqui. */
   hideScoreInputs?: boolean;
+  /** Mostra os campos de pênalti sempre (admin), habilitando-os só no empate. */
+  penaltiesAlwaysVisible?: boolean;
 }): React.JSX.Element {
   const [home, setHome] = useState(match.homeScore?.toString() ?? '');
   const [away, setAway] = useState(match.awayScore?.toString() ?? '');
@@ -88,7 +91,7 @@ function AdminMatchControls({
   const canReset = !isFinished && !started;
   const hasScore = home !== '' && away !== '';
   const isDraw = hasScore && home === away;
-  const showPen = allowPenalties && isDraw;
+  const showPen = allowPenalties && (isDraw || penaltiesAlwaysVisible);
   const dirty =
     home !== (match.homeScore?.toString() ?? '') ||
     away !== (match.awayScore?.toString() ?? '') ||
@@ -98,7 +101,8 @@ function AdminMatchControls({
   /** Campos de pênalti a enviar: preenchidos no empate, limpos caso contrário. */
   function penaltyBody(): Record<string, number | null> {
     if (!allowPenalties) return {};
-    if (showPen && homePen !== '' && awayPen !== '') {
+    // Pênaltis só contam (e são salvos) quando o tempo normal termina empatado.
+    if (isDraw && homePen !== '' && awayPen !== '') {
       return { homePenalty: parseInt(homePen, 10), awayPenalty: parseInt(awayPen, 10) };
     }
     return { homePenalty: null, awayPenalty: null };
@@ -182,12 +186,13 @@ function AdminMatchControls({
       )}
 
       {showPen && (
-        <View style={adS.penRow}>
-          <Text style={adS.penLabel}>Pênaltis</Text>
+        <View style={[adS.penRow, !isDraw && adS.penRowDim]}>
+          <Text style={adS.penLabel}>Pênaltis{!isDraw ? ' (só no empate)' : ''}</Text>
           <TextInput
             style={[adS.penInput, homePen !== '' && adS.inputFilled]}
             value={homePen}
             onChangeText={(v) => setHomePen(v.replace(/[^0-9]/g, '').slice(0, 2))}
+            editable={isDraw}
             keyboardType="number-pad"
             maxLength={2}
             placeholder="?"
@@ -199,6 +204,7 @@ function AdminMatchControls({
             style={[adS.penInput, awayPen !== '' && adS.inputFilled]}
             value={awayPen}
             onChangeText={(v) => setAwayPen(v.replace(/[^0-9]/g, '').slice(0, 2))}
+            editable={isDraw}
             keyboardType="number-pad"
             maxLength={2}
             placeholder="?"
@@ -289,6 +295,7 @@ const adS = StyleSheet.create({
   inputFilled: { borderColor: '#3B82F6' },
   sep: { fontSize: FontSizes.sm, color: Colors.textSecondary, fontWeight: FontWeights.bold },
   penRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginBottom: 5 },
+  penRowDim: { opacity: 0.5 },
   penLabel: { fontSize: 9, color: Colors.textSecondary, fontWeight: FontWeights.bold, marginRight: 2, textTransform: 'uppercase' },
   penInput: {
     backgroundColor: Colors.backgroundAlt,
@@ -806,43 +813,10 @@ function BracketCard({
   onMatchSaved: () => void;
   cardStyle?: object;
 }): React.JSX.Element {
-  const [expanded, setExpanded] = useState(false);
   const teamsKnown = !!(match.homeTeam && match.awayTeam);
   const hasScore   = match.homeScore !== null && match.awayScore !== null;
   const hasPens    = match.homePenalty !== null && match.awayPenalty !== null;
   const editable   = isAdmin && teamsKnown && match.status !== 'FINISHED';
-
-  // Edição inline do placar (caixinhas ao lado de cada time) com autosave.
-  const [h, setH] = useState(match.homeScore?.toString() ?? '');
-  const [a, setA] = useState(match.awayScore?.toString() ?? '');
-  const [hp, setHp] = useState(match.homePenalty?.toString() ?? '');
-  const [ap, setAp] = useState(match.awayPenalty?.toString() ?? '');
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    setH(match.homeScore?.toString() ?? '');
-    setA(match.awayScore?.toString() ?? '');
-    setHp(match.homePenalty?.toString() ?? '');
-    setAp(match.awayPenalty?.toString() ?? '');
-  }, [match.homeScore, match.awayScore, match.homePenalty, match.awayPenalty]);
-  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
-
-  const typedDraw = h !== '' && a !== '' && h === a;
-
-  function scheduleSave(nh: string, na: string, nhp: string, nap: string): void {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    if (nh === '' || na === '') return;
-    const draw = nh === na;
-    const body: { homeScore: number; awayScore: number; homePenalty: number | null; awayPenalty: number | null } = {
-      homeScore: parseInt(nh, 10),
-      awayScore: parseInt(na, 10),
-      // Pênaltis só no empate; fora do empate, limpa qualquer valor antigo.
-      homePenalty: draw && nhp !== '' && nap !== '' ? parseInt(nhp, 10) : null,
-      awayPenalty: draw && nhp !== '' && nap !== '' ? parseInt(nap, 10) : null,
-    };
-    saveTimer.current = setTimeout(() => {
-      void patchMatchScore(match.id, body).then(onMatchSaved).catch(() => {});
-    }, 900);
-  }
 
   let homeWin = false, awayWin = false;
   if (hasScore) {
@@ -857,90 +831,56 @@ function BracketCard({
     const score  = side === 'home' ? match.homeScore : match.awayScore;
     const pen    = side === 'home' ? match.homePenalty : match.awayPenalty;
     const winner = side === 'home' ? homeWin : awayWin;
-    const val    = side === 'home' ? h : a;
-    const setVal = side === 'home' ? setH : setA;
-    const scoreStr = score !== null ? (pen !== null ? `${score}(${pen})` : `${score}`) : null;
     return (
       <View style={[bkS.teamRow, winner && bkS.teamRowW]}>
-        {team ? <FlagImage country={team.country} height={13} /> : <View style={bkS.flagPh} />}
+        {team ? <FlagImage country={team.country} height={14} /> : <View style={bkS.flagPh} />}
         <Text style={[bkS.teamName, winner && bkS.teamNameW]} numberOfLines={1}>
           {team ? team.name : (slot ?? '?')}
         </Text>
-        {editable ? (
-          <TextInput
-            style={[bkS.scoreInput, val !== '' && bkS.scoreInputFilled]}
-            value={val}
-            onChangeText={(t) => {
-              const clean = t.replace(/[^0-9]/g, '').slice(0, 2);
-              setVal(clean);
-              scheduleSave(side === 'home' ? clean : h, side === 'home' ? a : clean, hp, ap);
-            }}
-            keyboardType="number-pad"
-            maxLength={2}
-            placeholder="–"
-            placeholderTextColor={Colors.border}
-            selectTextOnFocus
-          />
-        ) : scoreStr !== null ? (
+        {/* Placar visível para todos quando há resultado (admin edita abaixo) */}
+        {!editable && score !== null && (
           <View style={[bkS.scoreBadge, winner && bkS.scoreBadgeW]}>
-            <Text style={[bkS.scoreText, winner && bkS.scoreTextW]}>{scoreStr}</Text>
+            <Text style={[bkS.scoreText, winner && bkS.scoreTextW]}>{score}</Text>
+            {pen !== null && <Text style={[bkS.penBadge, winner && bkS.scoreTextW]}> ({pen})</Text>}
           </View>
-        ) : null}
+        )}
       </View>
     );
   }
 
   return (
     <View style={[bkS.card, cardStyle]}>
-      <TouchableOpacity activeOpacity={0.85} onPress={() => setExpanded(v => !v)} style={bkS.cardHeader}>
+      <View style={bkS.cardHeader}>
         <Text style={bkS.matchNum}>J{match.matchNumber}</Text>
-        <View style={[bkS.dot, {
-          backgroundColor:
-            match.status === 'FINISHED' ? Colors.error :
-            match.status === 'CLOSED'   ? Colors.accentGold : Colors.success,
-        }]} />
-      </TouchableOpacity>
+        <View style={bkS.headerRight}>
+          {match.matchDate && (
+            <Text style={bkS.headerDate}>{fmtDate(match.matchDate)} · {match.matchDate.substring(11, 16)}</Text>
+          )}
+          <View style={[bkS.dot, {
+            backgroundColor:
+              match.status === 'FINISHED' ? Colors.error :
+              match.status === 'CLOSED'   ? Colors.accentGold : Colors.success,
+          }]} />
+        </View>
+      </View>
+
       <TeamRow side="home" />
       <View style={bkS.divider} />
       <TeamRow side="away" />
 
-      {/* Pênaltis: caixinha secundária só quando o tempo normal termina empatado */}
-      {editable && typedDraw && (
-        <View style={bkS.penRowInline}>
-          <Text style={bkS.penLbl}>Pênaltis</Text>
-          <TextInput
-            style={[bkS.scoreInput, hp !== '' && bkS.scoreInputFilled]}
-            value={hp}
-            onChangeText={(t) => { const c = t.replace(/[^0-9]/g, '').slice(0, 2); setHp(c); scheduleSave(h, a, c, ap); }}
-            keyboardType="number-pad" maxLength={2} placeholder="–" placeholderTextColor={Colors.border} selectTextOnFocus
-          />
-          <Text style={bkS.penSep}>×</Text>
-          <TextInput
-            style={[bkS.scoreInput, ap !== '' && bkS.scoreInputFilled]}
-            value={ap}
-            onChangeText={(t) => { const c = t.replace(/[^0-9]/g, '').slice(0, 2); setAp(c); scheduleSave(h, a, hp, c); }}
-            keyboardType="number-pad" maxLength={2} placeholder="–" placeholderTextColor={Colors.border} selectTextOnFocus
+      {/* Admin: mesmo fluxo da fase de grupos (salvar parcial, pênaltis no empate, encerrar 1h45 após) */}
+      {editable && (
+        <View style={bkS.adminInline}>
+          <AdminMatchControls
+            match={match}
+            onSaved={onMatchSaved}
+            allowPenalties
+            penaltiesAlwaysVisible
           />
         </View>
       )}
 
-      {expanded && (
-        <View style={bkS.panel}>
-          {match.matchDate && (
-            <Text style={bkS.panelTxt}>
-              {fmtDate(match.matchDate)} · {match.matchDate.substring(11, 16)}
-            </Text>
-          )}
-          {match.venue && <Text style={bkS.panelTxt}>{match.venue}</Text>}
-          {editable && (
-            <AdminMatchControls
-              match={match}
-              onSaved={() => { setExpanded(false); onMatchSaved(); }}
-              hideScoreInputs
-            />
-          )}
-        </View>
-      )}
+      {!editable && match.venue && <Text style={bkS.venueTxt} numberOfLines={1}>{match.venue}</Text>}
     </View>
   );
 }
@@ -980,8 +920,10 @@ function MataMataView({
   onMatchSaved: () => void;
 }): React.JSX.Element {
   const [availW, setAvailW] = useState(0);
-  const { cards, lines, thirdCard, canvasW, canvasH, colXs } = buildBracketLayout(bracket, { width: availW });
-  const totalH = canvasH + (thirdCard ? CH + 48 : 0);
+  // Cards do admin são mais altos (controles inline) → mais espaço entre slots.
+  const cardHeight = isAdmin ? 196 : CH;
+  const { cards, lines, thirdCard, canvasW, canvasH, colXs } = buildBracketLayout(bracket, { width: availW, cardHeight });
+  const totalH = canvasH + (thirdCard ? cardHeight + 48 : 0);
 
   return (
     <View style={{ flex: 1 }}>
@@ -989,7 +931,9 @@ function MataMataView({
         <View style={bkS.notice}>
           <Ionicons name="information-circle-outline" size={12} color={Colors.textSecondary} />
           <Text style={bkS.noticeTxt}>
-            Placar editável nas caixinhas (admin). Toque no nº do jogo para data, estádio, pênaltis e encerrar. 3os colocados pelo Anexo C da FIFA.
+            {isAdmin
+              ? 'Edite o placar como na fase de grupos: salve o parcial, informe os pênaltis em caso de empate e encerre 1h45 após o início. 3os colocados pelo Anexo C da FIFA.'
+              : 'Resultados oficiais do mata-mata. 3os colocados alocados pelo Anexo C da FIFA.'}
           </Text>
         </View>
       )}
@@ -1059,8 +1003,13 @@ const bkS = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 6, paddingTop: 4, paddingBottom: 2,
   },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  headerDate: { fontSize: 9, color: Colors.textSecondary },
   matchNum: { fontSize: 9, fontWeight: FontWeights.bold, color: Colors.accentGold },
   dot: { width: 5, height: 5, borderRadius: 3 },
+  penBadge: { fontSize: 9, fontWeight: FontWeights.bold, color: Colors.textSecondary },
+  adminInline: { paddingHorizontal: 6, paddingBottom: 4, borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 2 },
+  venueTxt: { fontSize: 9, color: Colors.textSecondary, textAlign: 'center', paddingHorizontal: 6, paddingBottom: 4 },
   teamRow: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 6, paddingVertical: 5,
