@@ -4,7 +4,6 @@ import {
   Dimensions, Platform, UIManager, ActivityIndicator, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BracketCanvas } from '@/components/BracketCanvas';
 import { FlagImage } from '@/components/FlagImage';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useAuth } from '@/hooks/useAuth';
@@ -320,6 +319,13 @@ const PHASE_LABEL: Record<Phase, string> = {
   terceiros: '3os Lugares',
   grupos: 'Fase de Grupos',
   matamata: 'Mata-Mata',
+};
+
+type KnockoutRound = 'r32' | 'r16' | 'qf' | 'sf' | 'final' | 'terceiro';
+const KO_LABEL: Record<KnockoutRound, string> = {
+  r32: 'Rodada de 32', r16: 'Oitavas de Final',
+  qf: 'Quartas de Final', sf: 'Semifinais',
+  final: 'Final', terceiro: '3º Lugar',
 };
 
 const CLASSIFICATION_CRITERIA = [
@@ -777,114 +783,261 @@ const crS = StyleSheet.create({
 });
 
 // ─── MATA-MATA ────────────────────────────────────────────────────────────────
+// ─── MATA-MATA ────────────────────────────────────────────────────────────────
 
-// Largura do card de confronto no bracket
+// ── Dimensões do canvas ───────────────────────────────────────────────────────
+const CW      = 160;  // card width
+const CH      = 76;   // card height (header + 2 team rows com score visível)
+const CGAP    = 52;   // gap horizontal entre colunas
+const PAD     = 20;   // padding externo do canvas
+const LABEL_H = 22;   // altura do label de fase
+const SLOT_H  = CH + 14; // altura de cada slot (card + espaço mínimo)
 
-/** Um card de confronto compacto para uso dentro do bracket visual */
+// ── Chaveamento oficial Copa 2026 ─────────────────────────────────────────────
+// slotIndex: posição top→bottom dentro da fase (ordem oficial da FIFA)
+const SLOT_INDEX: Record<string, number> = {
+  // R32 — 16 slots
+  M73:0, M74:1, M75:2,  M76:3,
+  M77:4, M78:5, M79:6,  M80:7,
+  M81:8, M82:9, M83:10, M84:11,
+  M85:12,M86:13,M87:14, M88:15,
+  // R16 — 8 slots
+  M89:0, M90:1, M91:2, M92:3,
+  M93:4, M94:5, M95:6, M96:7,
+  // QF — 4 slots
+  M97:0, M98:1, M99:2, M100:3,
+  // SF — 2 slots
+  M101:0, M102:1,
+  // Final — 1 slot
+  M104:0,
+  // 3º lugar — tratado separado
+  M103:0,
+};
+
+// Número de slots por fase
+const PHASE_SLOTS: Record<string, number> = {
+  r32:16, r16:8, qf:4, sf:2, final:1,
+};
+
+// Ordem das colunas principais (terceiro fica abaixo da final)
+const COL_ORDER = ['r32','r16','qf','sf','final'] as const;
+type MainRound = typeof COL_ORDER[number];
+
+const COL_LABELS: Record<MainRound, string> = {
+  r32:'Rodada de 32', r16:'Oitavas', qf:'Quartas', sf:'Semis', final:'Final',
+};
+
+// Quem alimenta quem: [srcExtId, dstExtId, 'top'|'bot']
+// top = entra no slot superior do dst, bot = slot inferior
+const FEEDS: Array<[string, string, 'top'|'bot']> = [
+  // R32 → R16
+  ['M74','M89','top'], ['M77','M89','bot'],
+  ['M73','M90','top'], ['M75','M90','bot'],
+  ['M76','M91','top'], ['M78','M91','bot'],
+  ['M79','M92','top'], ['M80','M92','bot'],
+  ['M83','M93','top'], ['M84','M93','bot'],
+  ['M81','M94','top'], ['M82','M94','bot'],
+  ['M86','M95','top'], ['M88','M95','bot'],
+  ['M85','M96','top'], ['M87','M96','bot'],
+  // R16 → QF
+  ['M89','M97','top'], ['M90','M97','bot'],
+  ['M93','M98','top'], ['M94','M98','bot'],
+  ['M91','M99','top'], ['M92','M99','bot'],
+  ['M95','M100','top'],['M96','M100','bot'],
+  // QF → SF
+  ['M97','M101','top'], ['M98','M101','bot'],
+  ['M99','M102','top'], ['M100','M102','bot'],
+  // SF → Final
+  ['M101','M104','top'], ['M102','M104','bot'],
+];
+
+// SF perdedores → 3º lugar
+const THIRD_FEEDS: Array<[string, 'top'|'bot']> = [
+  ['M101','top'], ['M102','bot'],
+];
+
+// ── Cálculo de layout ─────────────────────────────────────────────────────────
+
+interface CardLayout {
+  x: number; y: number; match: BracketMatch;
+}
+interface LineSegment {
+  x1:number; y1:number; x2:number; y2:number; xMid:number;
+}
+
+function buildBracketLayout(bracket: BracketMatch[]): {
+  cards: CardLayout[];
+  lines: LineSegment[];
+  thirdCard: CardLayout | null;
+  canvasW: number;
+  canvasH: number;
+} {
+  // Canvas height driven by R32 (16 slots)
+  const maxSlots = 16;
+  const totalH   = maxSlots * SLOT_H;
+  const canvasH  = LABEL_H + PAD + totalH + PAD;
+  const canvasW  = PAD + COL_ORDER.length * (CW + CGAP) + PAD;
+
+  function colX(colIdx: number): number {
+    return PAD + colIdx * (CW + CGAP);
+  }
+
+  // Centro Y de um slot dentro de uma fase, relativo ao canvas
+  function centerY(round: string, slotIdx: number): number {
+    const slots     = PHASE_SLOTS[round] ?? 1;
+    const groupSize = maxSlots / slots;           // quantos slots R32 este cobre
+    const topSlot   = slotIdx * groupSize;
+    const botSlot   = topSlot + groupSize - 1;
+    const topY      = LABEL_H + PAD + topSlot * SLOT_H + CH / 2;
+    const botY      = LABEL_H + PAD + botSlot * SLOT_H + CH / 2;
+    return (topY + botY) / 2;
+  }
+
+  // Constrói cards
+  const cards: CardLayout[] = [];
+  const byExtId = new Map<string, CardLayout>();
+
+  for (const m of bracket) {
+    if (m.round === 'terceiro') continue;
+    const extId  = m.externalId ?? '';
+    const slotIdx = SLOT_INDEX[extId] ?? 0;
+    const colIdx  = COL_ORDER.indexOf(m.round as MainRound);
+    if (colIdx < 0) continue;
+    const cy = centerY(m.round, slotIdx);
+    const layout: CardLayout = { x: colX(colIdx), y: cy - CH / 2, match: m };
+    cards.push(layout);
+    byExtId.set(extId, layout);
+  }
+
+  // Terceiro: logo abaixo da final
+  let thirdCard: CardLayout | null = null;
+  const thirdMatch = bracket.find((m) => m.round === 'terceiro');
+  const finalCard  = cards.find((c) => c.match.round === 'final');
+  if (thirdMatch) {
+    const thirdY = finalCard ? finalCard.y + CH + 32 : centerY('sf', 0);
+    thirdCard = { x: colX(COL_ORDER.indexOf('final')), y: thirdY, match: thirdMatch };
+  }
+
+  // Constrói linhas
+  const lines: LineSegment[] = [];
+
+  function addLine(srcExtId: string, dstLayout: CardLayout, side: 'top'|'bot'): void {
+    const src = byExtId.get(srcExtId);
+    if (!src) return;
+    const x1   = src.x + CW;
+    const y1   = src.y + CH / 2;
+    const x2   = dstLayout.x;
+    const y2   = side === 'top' ? dstLayout.y + CH * 0.27 : dstLayout.y + CH * 0.73;
+    const xMid = x1 + CGAP / 2;
+    lines.push({ x1, y1, x2, y2, xMid });
+  }
+
+  for (const [src, dst, side] of FEEDS) {
+    const dstL = byExtId.get(dst);
+    if (dstL) addLine(src, dstL, side);
+  }
+
+  if (thirdCard) {
+    for (const [src, side] of THIRD_FEEDS) {
+      const srcL = byExtId.get(src);
+      if (!srcL) continue;
+      const x1   = srcL.x + CW;
+      const y1   = srcL.y + CH / 2;
+      const x2   = thirdCard.x;
+      const y2   = side === 'top' ? thirdCard.y + CH * 0.27 : thirdCard.y + CH * 0.73;
+      const xMid = x1 + CGAP / 2;
+      lines.push({ x1, y1, x2, y2, xMid });
+    }
+  }
+
+  return { cards, lines, thirdCard, canvasW, canvasH };
+}
+
+// ── Card individual ───────────────────────────────────────────────────────────
+
 function BracketCard({
-  match,
-  isAdmin,
-  onMatchSaved,
-  highlighted,
+  match, isAdmin, onMatchSaved, cardStyle,
 }: {
   match: BracketMatch;
   isAdmin: boolean;
   onMatchSaved: () => void;
-  highlighted?: boolean;
+  cardStyle?: object;
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false);
-  const hasScore = match.homeScore !== null && match.awayScore !== null;
   const teamsKnown = !!(match.homeTeam && match.awayTeam);
-  const phaseHint = match.round === 'terceiro' ? '3o Lugar' : null;
+  const hasScore   = match.homeScore !== null && match.awayScore !== null;
+  const hasPens    = match.homePenalty !== null && match.awayPenalty !== null;
+
+  let homeWin = false, awayWin = false;
+  if (hasScore) {
+    if (hasPens) {
+      homeWin = (match.homePenalty ?? 0) > (match.awayPenalty ?? 0);
+    } else {
+      homeWin = (match.homeScore ?? 0) > (match.awayScore ?? 0);
+    }
+    awayWin = hasScore && !homeWin && (match.homeScore !== match.awayScore || hasPens);
+  }
 
   function TeamRow({ team, slot, score, pen, winner }: {
-    team: BracketMatch['homeTeam'];
-    slot: string | null;
-    score: number | null;
-    pen: number | null;
-    winner: boolean;
+    team: BracketMatch['homeTeam']; slot: string|null;
+    score: number|null; pen: number|null; winner: boolean;
   }): React.JSX.Element {
+    const scoreStr = score !== null
+      ? (pen !== null ? `${score}(${pen})` : `${score}`)
+      : null;
     return (
-      <View style={[bkS.teamRow, winner && bkS.teamRowWinner]}>
+      <View style={[bkS.teamRow, winner && bkS.teamRowW]}>
         {team
-          ? <FlagImage country={team.country} height={14} />
-          : <View style={bkS.flagPlaceholder} />}
-        <Text style={[bkS.teamName, winner && bkS.teamNameWinner]} numberOfLines={1}>
-          {team ? team.name : (slot ?? 'A definir')}
+          ? <FlagImage country={team.country} height={13} />
+          : <View style={bkS.flagPh} />}
+        <Text style={[bkS.teamName, winner && bkS.teamNameW]} numberOfLines={1}>
+          {team ? team.name : (slot ?? '?')}
         </Text>
-        <View style={[bkS.scoreBox, winner && bkS.scoreBoxWinner]}>
-          <Text style={[bkS.scoreText, winner && bkS.scoreTextWinner]}>
-            {score ?? '-'}
-          </Text>
-          {pen !== null && <Text style={bkS.penText}>{pen}</Text>}
-        </View>
+        {scoreStr !== null && (
+          <View style={[bkS.scoreBadge, winner && bkS.scoreBadgeW]}>
+            <Text style={[bkS.scoreText, winner && bkS.scoreTextW]}>{scoreStr}</Text>
+          </View>
+        )}
       </View>
     );
   }
 
-  // Determina vencedor
-  let homeWin = false;
-  let awayWin = false;
-  if (hasScore) {
-    const hTotal = (match.homeScore ?? 0) + (match.homePenalty !== null ? 0.1 * (match.homePenalty ?? 0) : 0);
-    const aTotal = (match.awayScore ?? 0) + (match.awayPenalty !== null ? 0.1 * (match.awayPenalty ?? 0) : 0);
-    if (match.homePenalty !== null) {
-      homeWin = (match.homePenalty ?? 0) > (match.awayPenalty ?? 0);
-      awayWin = !homeWin;
-    } else {
-      homeWin = hTotal > aTotal;
-      awayWin = aTotal > hTotal;
-    }
-  }
-
   return (
-    <View style={bkS.cardWrap}>
+    <View style={cardStyle}>
       <TouchableOpacity
         activeOpacity={0.85}
-        onPress={() => setExpanded((v) => !v)}
-        style={[bkS.card, highlighted && bkS.cardHighlighted]}
+        onPress={() => setExpanded(v => !v)}
+        style={bkS.card}
       >
-        <View style={bkS.matchNumRow}>
-          <Text style={bkS.matchNum}>
-            J{match.matchNumber}{phaseHint ? ` - ${phaseHint}` : ''}
-          </Text>
-          <View style={[bkS.statusDot, {
+        <View style={bkS.cardHeader}>
+          <Text style={bkS.matchNum}>J{match.matchNumber}</Text>
+          <View style={[bkS.dot, {
             backgroundColor:
               match.status === 'FINISHED' ? Colors.error :
               match.status === 'CLOSED'   ? Colors.accentGold : Colors.success,
           }]} />
         </View>
-        <TeamRow
-          team={match.homeTeam}
-          slot={match.homeSlot}
-          score={match.homeScore}
-          pen={match.homePenalty}
-          winner={homeWin}
-        />
+        <TeamRow team={match.homeTeam} slot={match.homeSlot}
+          score={match.homeScore} pen={match.homePenalty} winner={homeWin} />
         <View style={bkS.divider} />
-        <TeamRow
-          team={match.awayTeam}
-          slot={match.awaySlot}
-          score={match.awayScore}
-          pen={match.awayPenalty}
-          winner={awayWin}
-        />
+        <TeamRow team={match.awayTeam} slot={match.awaySlot}
+          score={match.awayScore} pen={match.awayPenalty} winner={awayWin} />
       </TouchableOpacity>
 
-      {/* Painel expandido: data, estádio, admin */}
       {expanded && (
-        <View style={bkS.expandPanel}>
+        <View style={bkS.panel}>
           {match.matchDate && (
-            <Text style={bkS.expandMeta}>
-              {fmtDate(match.matchDate)} · {match.matchDate.substring(11, 16)}
+            <Text style={bkS.panelTxt}>
+              {fmtDate(match.matchDate)} · {match.matchDate.substring(11,16)}
             </Text>
           )}
-          {match.venue && <Text style={bkS.expandMeta}>{match.venue}</Text>}
+          {match.venue && <Text style={bkS.panelTxt}>{match.venue}</Text>}
           {isAdmin && teamsKnown && match.status !== 'FINISHED' && (
-            <AdminMatchControls match={match} onSaved={() => { setExpanded(false); onMatchSaved(); }} allowPenalties />
-          )}
-          {!isAdmin && !teamsKnown && (
-            <Text style={bkS.expandMeta}>Times a definir</Text>
+            <AdminMatchControls
+              match={match}
+              onSaved={() => { setExpanded(false); onMatchSaved(); }}
+              allowPenalties
+            />
           )}
         </View>
       )}
@@ -892,7 +1045,33 @@ function BracketCard({
   );
 }
 
-/** Coluna de confrontos do bracket com rótulo de fase */
+// ── Linhas de conexão ─────────────────────────────────────────────────────────
+
+function ConnectorLines({ lines }: { lines: LineSegment[] }): React.JSX.Element {
+  return (
+    <>
+      {lines.map((l, i) => {
+        const vTop = Math.min(l.y1, l.y2);
+        const vLen = Math.abs(l.y2 - l.y1);
+        return (
+          <React.Fragment key={i}>
+            {/* src → xMid horizontal */}
+            <View style={[bkS.line, { left: l.x1, top: l.y1, width: l.xMid - l.x1 }]} />
+            {/* vertical bend */}
+            {vLen > 1 && (
+              <View style={[bkS.line, { left: l.xMid, top: vTop, width: 1, height: vLen }]} />
+            )}
+            {/* xMid → dst horizontal */}
+            <View style={[bkS.line, { left: l.xMid, top: l.y2, width: l.x2 - l.xMid }]} />
+          </React.Fragment>
+        );
+      })}
+    </>
+  );
+}
+
+// ── MataMataView ──────────────────────────────────────────────────────────────
+
 function MataMataView({
   bracket, isAdmin, onMatchSaved,
 }: {
@@ -900,56 +1079,136 @@ function MataMataView({
   isAdmin: boolean;
   onMatchSaved: () => void;
 }): React.JSX.Element {
-  // Agrupa por rodada, preservando ordem de exibição
+  const { cards, lines, thirdCard, canvasW, canvasH } = buildBracketLayout(bracket);
+  const totalH = canvasH + (thirdCard ? CH + 48 : 0);
+
   return (
     <View style={{ flex: 1 }}>
-      {/* Aviso Rodada de 32 */}
-      {bracket.some((m) => m.round === 'r32') && (
+      {bracket.some(m => m.round === 'r32') && (
         <View style={bkS.notice}>
-          <Ionicons name="information-circle-outline" size={13} color={Colors.textSecondary} />
+          <Ionicons name="information-circle-outline" size={12} color={Colors.textSecondary} />
           <Text style={bkS.noticeTxt}>
-            3os colocados distribuídos pelo Anexo C da FIFA (495 combinações). Toque em qualquer jogo para ver detalhes e data.
+            Toque num jogo para ver data, estádio e editar (admin). 3os colocados pelo Anexo C da FIFA.
           </Text>
         </View>
       )}
-      <BracketCanvas
-        matches={bracket}
-        renderMatch={(match) => (
-          <BracketCard
-            match={match}
-            isAdmin={isAdmin}
-            onMatchSaved={onMatchSaved}
-          />
-        )}
-      />
+
+      {/* ScrollView com scroll livre horizontal + vertical */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator
+        showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ width: canvasW }}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator
+          contentContainerStyle={{ height: totalH, width: canvasW }}
+          style={{ flex: 1 }}
+        >
+          {/* Labels de fase */}
+          {COL_ORDER.map((round, idx) => bracket.some(m => m.round === round) && (
+            <Text key={round} style={[bkS.colLabel, {
+              position: 'absolute',
+              left: PAD + idx * (CW + CGAP),
+              top: PAD,
+              width: CW,
+              textAlign: 'center',
+            }]}>
+              {COL_LABELS[round]}
+            </Text>
+          ))}
+
+          {/* Linhas de conexão — atrás dos cards */}
+          <ConnectorLines lines={lines} />
+
+          {/* Cards posicionados absolutamente */}
+          {cards.map(c => (
+            <BracketCard
+              key={c.match.id}
+              match={c.match}
+              isAdmin={isAdmin}
+              onMatchSaved={onMatchSaved}
+              cardStyle={{
+                position: 'absolute',
+                left: c.x,
+                top: c.y,
+                width: CW,
+              }}
+            />
+          ))}
+
+          {/* 3º Lugar */}
+          {thirdCard && (
+            <View style={{ position: 'absolute', left: thirdCard.x, top: thirdCard.y }}>
+              <Text style={[bkS.colLabel, { textAlign: 'center', width: CW, marginBottom: 4 }]}>
+                3º Lugar
+              </Text>
+              <BracketCard
+                match={thirdCard.match}
+                isAdmin={isAdmin}
+                onMatchSaved={onMatchSaved}
+                cardStyle={{ width: CW }}
+              />
+            </View>
+          )}
+        </ScrollView>
+      </ScrollView>
     </View>
   );
 }
 
 const bkS = StyleSheet.create({
-  notice: { flexDirection: 'row', gap: 6, alignItems: 'flex-start', margin: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surface, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.border },
+  notice: {
+    flexDirection: 'row', gap: 6, alignItems: 'flex-start',
+    margin: Spacing.sm, padding: Spacing.sm,
+    backgroundColor: Colors.surface, borderRadius: BorderRadius.md,
+    borderWidth: 1, borderColor: Colors.border,
+  },
   noticeTxt: { flex: 1, fontSize: 10, color: Colors.textSecondary, lineHeight: 15 },
-  // Card
-  cardWrap: { width: '100%', height: '100%' },
-  card: { height: '100%', backgroundColor: Colors.surface, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadows.sm },
-  cardHighlighted: { borderColor: Colors.accentGold },
-  matchNumRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 7, paddingTop: 5, paddingBottom: 3 },
+  colLabel: {
+    fontSize: 9, fontWeight: FontWeights.bold, color: Colors.accentGold,
+    textTransform: 'uppercase', letterSpacing: 0.8,
+  },
+  // card
+  card: {
+    backgroundColor: Colors.surface, borderRadius: BorderRadius.sm,
+    borderWidth: 1, borderColor: Colors.border,
+    overflow: 'hidden', ...Shadows.sm,
+  },
+  cardHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 6, paddingTop: 4, paddingBottom: 2,
+  },
   matchNum: { fontSize: 9, fontWeight: FontWeights.bold, color: Colors.accentGold },
-  statusDot: { width: 5, height: 5, borderRadius: 3 },
-  teamRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 7, paddingVertical: 5 },
-  teamRowWinner: { backgroundColor: 'rgba(245,158,11,0.08)' },
+  dot: { width: 5, height: 5, borderRadius: 3 },
+  teamRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 6, paddingVertical: 5,
+  },
+  teamRowW: { backgroundColor: 'rgba(245,158,11,0.10)' },
   teamName: { flex: 1, fontSize: 11, color: Colors.textSecondary, fontWeight: FontWeights.medium },
-  teamNameWinner: { color: Colors.textPrimary, fontWeight: FontWeights.bold },
-  scoreBox: { minWidth: 32, height: 28, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.backgroundAlt, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  scoreBoxWinner: { borderColor: Colors.accentGold, backgroundColor: 'rgba(245,158,11,0.12)' },
-  scoreText: { fontSize: 13, fontWeight: FontWeights.bold, color: Colors.textSecondary, lineHeight: 15 },
-  scoreTextWinner: { color: Colors.accentGold },
-  penText: { fontSize: 8, color: Colors.textSecondary, lineHeight: 9 },
-  flagPlaceholder: { width: 14, height: 10, backgroundColor: Colors.border, borderRadius: 2 },
+  teamNameW: { color: Colors.textPrimary, fontWeight: FontWeights.bold },
+  scoreBadge: {
+    minWidth: 22, paddingHorizontal: 3, paddingVertical: 1,
+    borderRadius: 3, backgroundColor: Colors.backgroundAlt,
+    alignItems: 'center',
+  },
+  scoreBadgeW: { backgroundColor: Colors.accentGold },
+  scoreText: { fontSize: 11, fontWeight: FontWeights.bold, color: Colors.textSecondary },
+  scoreTextW: { color: Colors.background },
+  flagPh: { width: 13, height: 9, backgroundColor: Colors.border, borderRadius: 2 },
   divider: { height: 1, backgroundColor: Colors.border, marginHorizontal: 6 },
-  // Expand panel
-  expandPanel: { backgroundColor: Colors.backgroundAlt, borderWidth: 1, borderTopWidth: 0, borderColor: Colors.border, borderBottomLeftRadius: BorderRadius.sm, borderBottomRightRadius: BorderRadius.sm, padding: Spacing.sm, gap: 4 },
-  expandMeta: { fontSize: 10, color: Colors.textSecondary, textAlign: 'center' },
+  // connector lines
+  line: { position: 'absolute', height: 1, backgroundColor: Colors.border, opacity: 0.45 },
+  // expand panel
+  panel: {
+    backgroundColor: Colors.backgroundAlt,
+    borderWidth: 1, borderTopWidth: 0, borderColor: Colors.border,
+    borderBottomLeftRadius: BorderRadius.sm, borderBottomRightRadius: BorderRadius.sm,
+    padding: 6, gap: 3, zIndex: 10,
+  },
+  panelTxt: { fontSize: 10, color: Colors.textSecondary, textAlign: 'center' },
 });
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
