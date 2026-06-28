@@ -5,9 +5,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { FlagImage } from '@/components/FlagImage';
 import { getStandingsData } from '@/services/standings';
-import { getBracketPrediction, saveBracketPrediction } from '@/services/bracketPredictions';
+import { getBracketPrediction, saveBracketPrediction, getAllBracketPredictions } from '@/services/bracketPredictions';
 import type { BracketMatch, TeamInfo } from '@/services/standings';
-import type { BracketPicks } from '@/services/bracketPredictions';
+import type { BracketPicks, UserBracketPrediction } from '@/services/bracketPredictions';
+import { useAuth } from '@/hooks/useAuth';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '@/constants/theme';
 import {
   buildBracketLayout, CW, CH, COL_ORDER, COL_LABELS, type LineSegment,
@@ -57,7 +58,7 @@ function resolveTeam(
 // ── Card de previsão ──────────────────────────────────────────────────────────
 
 function PredCard({
-  match, picks, byExtId, allMatches, onPick, cardStyle, locked = false,
+  match, picks, byExtId, allMatches, onPick, cardStyle, locked = false, compareState = null,
 }: {
   match: BracketMatch;
   picks: BracketPicks;
@@ -66,6 +67,8 @@ function PredCard({
   onPick: (matchId: string, teamId: string | null) => void;
   cardStyle?: object;
   locked?: boolean;
+  /** Comparação com a minha previsão: 'same' (igual), 'diff' (diverge) ou null. */
+  compareState?: 'same' | 'diff' | null;
 }): React.JSX.Element {
   const homeTeam = resolveTeam(match, 'home', picks, byExtId);
   const awayTeam = resolveTeam(match, 'away', picks, byExtId);
@@ -98,7 +101,11 @@ function PredCard({
   }
 
   return (
-    <View style={[pcS.card, cardStyle]}>
+    <View style={[
+      pcS.card, cardStyle,
+      compareState === 'same' && pcS.cardSame,
+      compareState === 'diff' && pcS.cardDiff,
+    ]}>
       <Text style={pcS.num}>J{match.matchNumber}</Text>
       <Slot team={homeTeam} slot={match.homeSlot} side="home" />
       <View style={pcS.divider} />
@@ -112,6 +119,8 @@ const pcS = StyleSheet.create({
     backgroundColor: Colors.surface, borderRadius: BorderRadius.sm,
     borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadows.sm,
   },
+  cardSame: { borderColor: Colors.success, borderWidth: 2 },
+  cardDiff: { borderColor: Colors.error, borderWidth: 2 },
   num: { fontSize: 9, fontWeight: FontWeights.bold, color: Colors.accentGold, paddingHorizontal: 6, paddingTop: 4, paddingBottom: 2 },
   slot: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 5 },
   slotPicked: { backgroundColor: 'rgba(245,158,11,0.14)' },
@@ -150,8 +159,12 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 const DEBOUNCE_MS = 1500;
 
 export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number) => void } = {}): React.JSX.Element {
+  const { user } = useAuth();
   const [bracket,   setBracket]   = useState<BracketMatch[]>([]);
   const [picks,     setPicks]     = useState<BracketPicks>({});
+  const [others,    setOthers]    = useState<UserBracketPrediction[]>([]);
+  const [viewerId,  setViewerId]  = useState<string | null>(null); // null = minha previsão
+  const [compare,   setCompare]   = useState(false);
   const [loading,   setLoading]   = useState(true);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [error,     setError]     = useState('');
@@ -166,6 +179,10 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
       setBracket(standings.bracket);
       setPicks(saved.picks ?? {});
       latestPicks.current = saved.picks ?? {};
+      // Após a trava, carrega as previsões de todos para comparação.
+      if (isBracketLocked()) {
+        try { setOthers(await getAllBracketPredictions()); } catch { setOthers([]); }
+      }
     } catch {
       setError('Erro ao carregar. Tente novamente.');
     } finally {
@@ -237,6 +254,30 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
   // 32 jogos do mata-mata = R32(16)+Oitavas(8)+Quartas(4)+Semis(2)+3º(1)+Final(1).
   const total = bracket.length;
 
+  // ── Comparação entre participantes (somente após a trava) ──────────────────
+  const myId = user?.id ?? '__me__';
+  const viewers = React.useMemo(() => {
+    const list: { id: string; label: string; picks: BracketPicks }[] = [
+      { id: myId, label: 'Você', picks },
+    ];
+    for (const o of others) if (o.userId !== myId) list.push({ id: o.userId, label: o.nickname, picks: o.picks });
+    return list;
+  }, [others, picks, myId]);
+  const selected      = viewers.find(v => v.id === viewerId) ?? viewers[0];
+  const isViewingOther = selected.id !== myId;
+  const displayPicks  = selected.picks;
+  const compareActive = compare && isViewingOther;
+  const cardLocked    = locked || isViewingOther; // previsão de outro é sempre read-only
+  const showSelector  = locked && viewers.length > 1;
+
+  function compareState(matchId: string): 'same' | 'diff' | null {
+    if (!compareActive) return null;
+    const mine = picks[matchId];
+    const theirs = selected.picks[matchId];
+    if (!mine || !theirs) return null;
+    return mine === theirs ? 'same' : 'diff';
+  }
+
   if (loading) {
     return (
       <View style={pS.center}>
@@ -298,6 +339,56 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
         </Text>
       )}
 
+      {/* Seletor de participantes (após a trava) */}
+      {showSelector && (
+        <View style={pS.selectorWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={pS.chipsRow}>
+            {viewers.map(v => {
+              const active = v.id === selected.id;
+              return (
+                <TouchableOpacity
+                  key={v.id}
+                  style={[pS.chip, active && pS.chipActive]}
+                  onPress={() => { setViewerId(v.id === myId ? null : v.id); }}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons
+                    name={v.id === myId ? 'person' : 'eye-outline'}
+                    size={12}
+                    color={active ? Colors.background : Colors.textSecondary}
+                  />
+                  <Text style={[pS.chipTxt, active && pS.chipTxtActive]} numberOfLines={1}>{v.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          {isViewingOther && (
+            <TouchableOpacity
+              style={[pS.cmpBtn, compare && pS.cmpBtnOn]}
+              onPress={() => setCompare(c => !c)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="git-compare" size={13} color={compare ? Colors.background : Colors.accentGold} />
+              <Text style={[pS.cmpTxt, compare && pS.cmpTxtOn]}>Comparar</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Indicação clara de que estou vendo a previsão de outro participante */}
+      {isViewingOther && (
+        <View style={pS.viewingBar}>
+          <Ionicons name="eye" size={14} color={Colors.accentGold} />
+          <Text style={pS.viewingTxt}>
+            Vendo a previsão de <Text style={pS.viewingName}>{selected.label}</Text> (somente leitura)
+            {compareActive ? '  ·  🟩 igual à sua  🟥 diferente' : ''}
+          </Text>
+          <TouchableOpacity onPress={() => { setViewerId(null); setCompare(false); }} activeOpacity={0.8}>
+            <Text style={pS.viewingBack}>Ver a minha</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Canvas: faixa de títulos fixa + zoom (ver BracketCanvas) */}
       <BracketCanvas
         canvasW={canvasW}
@@ -319,11 +410,12 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
           <PredCard
             key={c.match.id}
             match={c.match}
-            picks={picks}
+            picks={displayPicks}
             byExtId={byExtId}
             allMatches={bracket}
             onPick={handlePick}
-            locked={locked}
+            locked={cardLocked}
+            compareState={compareState(c.match.id)}
             cardStyle={{ position: 'absolute', left: c.x, top: c.y, width: CW }}
           />
         ))}
@@ -336,11 +428,12 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
             </Text>
             <PredCard
               match={thirdCard.match}
-              picks={picks}
+              picks={displayPicks}
               byExtId={byExtId}
               allMatches={bracket}
               onPick={handlePick}
-              locked={locked}
+              locked={cardLocked}
+              compareState={compareState(thirdCard.match.id)}
               cardStyle={{ width: CW }}
             />
           </View>
@@ -378,6 +471,38 @@ const pS = StyleSheet.create({
   },
   warnTxt: { flex: 1, fontSize: 11, color: Colors.textPrimary, lineHeight: 16 },
   warnStrong: { fontWeight: FontWeights.bold, color: Colors.accentGold },
+  selectorWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: Spacing.sm, paddingVertical: 6,
+    backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  chipsRow: { gap: 6, paddingRight: 6, alignItems: 'center' },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 999, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.backgroundAlt, maxWidth: 140,
+  },
+  chipActive: { backgroundColor: Colors.accentGold, borderColor: Colors.accentGold },
+  chipTxt: { fontSize: 11, color: Colors.textSecondary, fontWeight: FontWeights.medium },
+  chipTxtActive: { color: Colors.background, fontWeight: FontWeights.bold },
+  cmpBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 999, borderWidth: 1, borderColor: Colors.accentGold,
+  },
+  cmpBtnOn: { backgroundColor: Colors.accentGold },
+  cmpTxt: { fontSize: 11, color: Colors.accentGold, fontWeight: FontWeights.bold },
+  cmpTxtOn: { color: Colors.background },
+  viewingBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: Spacing.md, paddingVertical: 7,
+    backgroundColor: 'rgba(245,158,11,0.10)',
+    borderBottomWidth: 1, borderBottomColor: Colors.accentGold,
+  },
+  viewingTxt: { flex: 1, fontSize: 11, color: Colors.textPrimary },
+  viewingName: { fontWeight: FontWeights.bold, color: Colors.accentGold },
+  viewingBack: { fontSize: 11, fontWeight: FontWeights.bold, color: Colors.accentGold, textDecorationLine: 'underline' },
   colLabel: {
     fontSize: 9, fontWeight: FontWeights.bold, color: Colors.accentGold,
     textTransform: 'uppercase', letterSpacing: 0.8,
