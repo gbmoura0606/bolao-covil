@@ -9,61 +9,9 @@ import { getBracketPrediction, saveBracketPrediction } from '@/services/bracketP
 import type { BracketMatch, TeamInfo } from '@/services/standings';
 import type { BracketPicks } from '@/services/bracketPredictions';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '@/constants/theme';
-
-// ── Dimensões — idênticas ao MataMataView para visual consistente ─────────────
-const CW      = 160;
-const CH      = 76;
-const CGAP    = 52;
-const PAD     = 20;
-const LABEL_H = 22;
-const SLOT_H  = CH + 14;
-
-// ── Chaveamento oficial ───────────────────────────────────────────────────────
-const SLOT_INDEX: Record<string, number> = {
-  M73:0,  M74:1,  M75:2,  M76:3,
-  M77:4,  M78:5,  M79:6,  M80:7,
-  M81:8,  M82:9,  M83:10, M84:11,
-  M85:12, M86:13, M87:14, M88:15,
-  M89:0,  M90:1,  M91:2,  M92:3,
-  M93:4,  M94:5,  M95:6,  M96:7,
-  M97:0,  M98:1,  M99:2,  M100:3,
-  M101:0, M102:1,
-  M104:0,
-  M103:0,
-};
-
-const PHASE_SLOTS: Record<string, number> = {
-  r32:16, r16:8, qf:4, sf:2, final:1,
-};
-
-const COL_ORDER  = ['r32','r16','qf','sf','final'] as const;
-type MainRound   = typeof COL_ORDER[number];
-
-const COL_LABELS: Record<MainRound, string> = {
-  r32:'R32', r16:'Oitavas', qf:'Quartas', sf:'Semis', final:'Final',
-};
-
-const FEEDS: Array<[string, string, 'top'|'bot']> = [
-  ['M74','M89','top'], ['M77','M89','bot'],
-  ['M73','M90','top'], ['M75','M90','bot'],
-  ['M76','M91','top'], ['M78','M91','bot'],
-  ['M79','M92','top'], ['M80','M92','bot'],
-  ['M83','M93','top'], ['M84','M93','bot'],
-  ['M81','M94','top'], ['M82','M94','bot'],
-  ['M86','M95','top'], ['M88','M95','bot'],
-  ['M85','M96','top'], ['M87','M96','bot'],
-  ['M89','M97','top'], ['M90','M97','bot'],
-  ['M93','M98','top'], ['M94','M98','bot'],
-  ['M91','M99','top'], ['M92','M99','bot'],
-  ['M95','M100','top'],['M96','M100','bot'],
-  ['M97','M101','top'],['M98','M101','bot'],
-  ['M99','M102','top'],['M100','M102','bot'],
-  ['M101','M104','top'],['M102','M104','bot'],
-];
-
-const THIRD_FEEDS: Array<[string,'top'|'bot']> = [
-  ['M101','top'], ['M102','bot'],
-];
+import {
+  buildBracketLayout, CW, CH, CGAP, PAD, COL_ORDER, COL_LABELS, type LineSegment,
+} from '@/components/bracketLayout';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -103,82 +51,8 @@ function resolveTeam(
   return null;
 }
 
-// ── Layout ────────────────────────────────────────────────────────────────────
-
-interface CardPos { x: number; y: number; match: BracketMatch; }
-interface LineSeg { x1:number; y1:number; x2:number; y2:number; xMid:number; }
-
-function buildLayout(bracket: BracketMatch[]): {
-  cards: CardPos[]; lines: LineSeg[];
-  thirdCard: CardPos | null; canvasW: number; canvasH: number;
-} {
-  const maxSlots = 16;
-  const totalH   = maxSlots * SLOT_H;
-  const canvasH  = LABEL_H + PAD + totalH + PAD;
-  const canvasW  = PAD + COL_ORDER.length * (CW + CGAP) + PAD;
-
-  const colX = (i: number) => PAD + i * (CW + CGAP);
-
-  function centerY(round: string, slotIdx: number): number {
-    const slots     = PHASE_SLOTS[round] ?? 1;
-    const groupSize = maxSlots / slots;
-    const topSlot   = slotIdx * groupSize;
-    const botSlot   = topSlot + groupSize - 1;
-    const topY      = LABEL_H + PAD + topSlot * SLOT_H + CH / 2;
-    const botY      = LABEL_H + PAD + botSlot * SLOT_H + CH / 2;
-    return (topY + botY) / 2;
-  }
-
-  const cards: CardPos[] = [];
-  const byExtId = new Map<string, CardPos>();
-
-  for (const m of bracket) {
-    if (m.round === 'terceiro') continue;
-    const extId   = m.externalId ?? '';
-    const slotIdx = SLOT_INDEX[extId] ?? 0;
-    const colIdx  = COL_ORDER.indexOf(m.round as MainRound);
-    if (colIdx < 0) continue;
-    const cy = centerY(m.round, slotIdx);
-    const pos: CardPos = { x: colX(colIdx), y: cy - CH / 2, match: m };
-    cards.push(pos);
-    byExtId.set(extId, pos);
-  }
-
-  let thirdCard: CardPos | null = null;
-  const thirdMatch = bracket.find(m => m.round === 'terceiro');
-  const finalCard  = cards.find(c => c.match.round === 'final');
-  if (thirdMatch) {
-    const ty = finalCard ? finalCard.y + CH + 32 : centerY('sf', 0);
-    thirdCard = { x: colX(COL_ORDER.indexOf('final')), y: ty, match: thirdMatch };
-  }
-
-  const lines: LineSeg[] = [];
-  function addLine(srcExt: string, dstPos: CardPos, side: 'top'|'bot'): void {
-    const src = byExtId.get(srcExt);
-    if (!src) return;
-    const x1   = src.x + CW;
-    const y1   = src.y + CH / 2;
-    const x2   = dstPos.x;
-    const y2   = side === 'top' ? dstPos.y + CH * 0.27 : dstPos.y + CH * 0.73;
-    lines.push({ x1, y1, x2, y2, xMid: x1 + CGAP / 2 });
-  }
-
-  for (const [src, dst, side] of FEEDS) {
-    const dstPos = byExtId.get(dst);
-    if (dstPos) addLine(src, dstPos, side);
-  }
-  if (thirdCard) {
-    for (const [src, side] of THIRD_FEEDS) {
-      const srcPos = byExtId.get(src);
-      if (!srcPos) continue;
-      const x1 = srcPos.x + CW, y1 = srcPos.y + CH / 2, x2 = thirdCard.x;
-      const y2 = side === 'top' ? thirdCard.y + CH * 0.27 : thirdCard.y + CH * 0.73;
-      lines.push({ x1, y1, x2, y2, xMid: x1 + CGAP / 2 });
-    }
-  }
-
-  return { cards, lines, thirdCard, canvasW, canvasH };
-}
+// Layout do chaveamento (dimensões, ordem da árvore e linhas) vem de
+// components/bracketLayout.ts — mesma fonte usada na aba Tabelas › Mata-Mata.
 
 // ── Card de previsão ──────────────────────────────────────────────────────────
 
@@ -251,7 +125,7 @@ const pcS = StyleSheet.create({
 
 // ── Linhas ────────────────────────────────────────────────────────────────────
 
-function Lines({ lines }: { lines: LineSeg[] }): React.JSX.Element {
+function Lines({ lines }: { lines: LineSegment[] }): React.JSX.Element {
   return (
     <>
       {lines.map((l, i) => {
@@ -347,7 +221,7 @@ export function PrevisaoChaveamento(): React.JSX.Element {
   }
 
   // Layout
-  const { cards, lines, thirdCard, canvasW, canvasH } = buildLayout(bracket);
+  const { cards, lines, thirdCard, canvasW, canvasH } = buildBracketLayout(bracket);
   const totalH = canvasH + (thirdCard ? CH + 52 : 0);
 
   const done  = Object.values(picks).filter(Boolean).length;

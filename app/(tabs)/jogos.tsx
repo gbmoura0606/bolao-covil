@@ -78,7 +78,7 @@ function TabBar({
     { id: 'open',     label: 'Próximos',   count: openCount },
     { id: 'live',     label: 'Ao Vivo',    count: liveCount, live: true },
     { id: 'finished', label: 'Resultados', count: finishedCount },
-    { id: 'previsao', label: '🏆 Bracket' },
+    { id: 'previsao', label: 'Previsão' },
   ];
   return (
     <View style={tbS.bar}>
@@ -154,7 +154,7 @@ function EmptyState({ tab }: { tab: TabId }): React.JSX.Element {
     open:     { icon: '📅', text: 'Nenhum jogo aberto para palpites no momento.' },
     live:     { icon: '⏳', text: 'Nenhum jogo ao vivo no momento.' },
     finished: { icon: '✅', text: 'Nenhum resultado disponível ainda.' },
-    previsao: { icon: '🏆', text: 'Bracket disponível em breve.' },
+    previsao: { icon: '🏆', text: 'Previsão disponível em breve.' },
   };
   const { icon, text } = msgs[tab];
   return (
@@ -249,7 +249,7 @@ export default function JogosScreen(): React.JSX.Element {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title="Jogos"
+        title="Palpites"
         subtitle={
           liveCount > 0
             ? `${liveCount} jogo${liveCount > 1 ? 's' : ''} ao vivo`

@@ -10,6 +10,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { patchMatchScore, resetMatchScore } from '@/services/matches';
 import { getStandingsData } from '@/services/standings';
 import type { StandingsData, StandingRow, ApiGroup, BracketMatch, GroupMatch } from '@/services/standings';
+import {
+  buildBracketLayout, CW, CH, CGAP, PAD, COL_ORDER, COL_LABELS, type LineSegment,
+} from '@/components/bracketLayout';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '@/constants/theme';
 
 const FINISH_DELAY_MS = 105 * 60_000;
@@ -785,173 +788,8 @@ const crS = StyleSheet.create({
 // ─── MATA-MATA ────────────────────────────────────────────────────────────────
 // ─── MATA-MATA ────────────────────────────────────────────────────────────────
 
-// ── Dimensões do canvas ───────────────────────────────────────────────────────
-const CW      = 160;  // card width
-const CH      = 76;   // card height (header + 2 team rows com score visível)
-const CGAP    = 52;   // gap horizontal entre colunas
-const PAD     = 20;   // padding externo do canvas
-const LABEL_H = 22;   // altura do label de fase
-const SLOT_H  = CH + 14; // altura de cada slot (card + espaço mínimo)
-
-// ── Chaveamento oficial Copa 2026 ─────────────────────────────────────────────
-// slotIndex: posição top→bottom dentro da fase (ordem oficial da FIFA)
-const SLOT_INDEX: Record<string, number> = {
-  // R32 — 16 slots
-  M73:0, M74:1, M75:2,  M76:3,
-  M77:4, M78:5, M79:6,  M80:7,
-  M81:8, M82:9, M83:10, M84:11,
-  M85:12,M86:13,M87:14, M88:15,
-  // R16 — 8 slots
-  M89:0, M90:1, M91:2, M92:3,
-  M93:4, M94:5, M95:6, M96:7,
-  // QF — 4 slots
-  M97:0, M98:1, M99:2, M100:3,
-  // SF — 2 slots
-  M101:0, M102:1,
-  // Final — 1 slot
-  M104:0,
-  // 3º lugar — tratado separado
-  M103:0,
-};
-
-// Número de slots por fase
-const PHASE_SLOTS: Record<string, number> = {
-  r32:16, r16:8, qf:4, sf:2, final:1,
-};
-
-// Ordem das colunas principais (terceiro fica abaixo da final)
-const COL_ORDER = ['r32','r16','qf','sf','final'] as const;
-type MainRound = typeof COL_ORDER[number];
-
-const COL_LABELS: Record<MainRound, string> = {
-  r32:'Rodada de 32', r16:'Oitavas', qf:'Quartas', sf:'Semis', final:'Final',
-};
-
-// Quem alimenta quem: [srcExtId, dstExtId, 'top'|'bot']
-// top = entra no slot superior do dst, bot = slot inferior
-const FEEDS: Array<[string, string, 'top'|'bot']> = [
-  // R32 → R16
-  ['M74','M89','top'], ['M77','M89','bot'],
-  ['M73','M90','top'], ['M75','M90','bot'],
-  ['M76','M91','top'], ['M78','M91','bot'],
-  ['M79','M92','top'], ['M80','M92','bot'],
-  ['M83','M93','top'], ['M84','M93','bot'],
-  ['M81','M94','top'], ['M82','M94','bot'],
-  ['M86','M95','top'], ['M88','M95','bot'],
-  ['M85','M96','top'], ['M87','M96','bot'],
-  // R16 → QF
-  ['M89','M97','top'], ['M90','M97','bot'],
-  ['M93','M98','top'], ['M94','M98','bot'],
-  ['M91','M99','top'], ['M92','M99','bot'],
-  ['M95','M100','top'],['M96','M100','bot'],
-  // QF → SF
-  ['M97','M101','top'], ['M98','M101','bot'],
-  ['M99','M102','top'], ['M100','M102','bot'],
-  // SF → Final
-  ['M101','M104','top'], ['M102','M104','bot'],
-];
-
-// SF perdedores → 3º lugar
-const THIRD_FEEDS: Array<[string, 'top'|'bot']> = [
-  ['M101','top'], ['M102','bot'],
-];
-
-// ── Cálculo de layout ─────────────────────────────────────────────────────────
-
-interface CardLayout {
-  x: number; y: number; match: BracketMatch;
-}
-interface LineSegment {
-  x1:number; y1:number; x2:number; y2:number; xMid:number;
-}
-
-function buildBracketLayout(bracket: BracketMatch[]): {
-  cards: CardLayout[];
-  lines: LineSegment[];
-  thirdCard: CardLayout | null;
-  canvasW: number;
-  canvasH: number;
-} {
-  // Canvas height driven by R32 (16 slots)
-  const maxSlots = 16;
-  const totalH   = maxSlots * SLOT_H;
-  const canvasH  = LABEL_H + PAD + totalH + PAD;
-  const canvasW  = PAD + COL_ORDER.length * (CW + CGAP) + PAD;
-
-  function colX(colIdx: number): number {
-    return PAD + colIdx * (CW + CGAP);
-  }
-
-  // Centro Y de um slot dentro de uma fase, relativo ao canvas
-  function centerY(round: string, slotIdx: number): number {
-    const slots     = PHASE_SLOTS[round] ?? 1;
-    const groupSize = maxSlots / slots;           // quantos slots R32 este cobre
-    const topSlot   = slotIdx * groupSize;
-    const botSlot   = topSlot + groupSize - 1;
-    const topY      = LABEL_H + PAD + topSlot * SLOT_H + CH / 2;
-    const botY      = LABEL_H + PAD + botSlot * SLOT_H + CH / 2;
-    return (topY + botY) / 2;
-  }
-
-  // Constrói cards
-  const cards: CardLayout[] = [];
-  const byExtId = new Map<string, CardLayout>();
-
-  for (const m of bracket) {
-    if (m.round === 'terceiro') continue;
-    const extId  = m.externalId ?? '';
-    const slotIdx = SLOT_INDEX[extId] ?? 0;
-    const colIdx  = COL_ORDER.indexOf(m.round as MainRound);
-    if (colIdx < 0) continue;
-    const cy = centerY(m.round, slotIdx);
-    const layout: CardLayout = { x: colX(colIdx), y: cy - CH / 2, match: m };
-    cards.push(layout);
-    byExtId.set(extId, layout);
-  }
-
-  // Terceiro: logo abaixo da final
-  let thirdCard: CardLayout | null = null;
-  const thirdMatch = bracket.find((m) => m.round === 'terceiro');
-  const finalCard  = cards.find((c) => c.match.round === 'final');
-  if (thirdMatch) {
-    const thirdY = finalCard ? finalCard.y + CH + 32 : centerY('sf', 0);
-    thirdCard = { x: colX(COL_ORDER.indexOf('final')), y: thirdY, match: thirdMatch };
-  }
-
-  // Constrói linhas
-  const lines: LineSegment[] = [];
-
-  function addLine(srcExtId: string, dstLayout: CardLayout, side: 'top'|'bot'): void {
-    const src = byExtId.get(srcExtId);
-    if (!src) return;
-    const x1   = src.x + CW;
-    const y1   = src.y + CH / 2;
-    const x2   = dstLayout.x;
-    const y2   = side === 'top' ? dstLayout.y + CH * 0.27 : dstLayout.y + CH * 0.73;
-    const xMid = x1 + CGAP / 2;
-    lines.push({ x1, y1, x2, y2, xMid });
-  }
-
-  for (const [src, dst, side] of FEEDS) {
-    const dstL = byExtId.get(dst);
-    if (dstL) addLine(src, dstL, side);
-  }
-
-  if (thirdCard) {
-    for (const [src, side] of THIRD_FEEDS) {
-      const srcL = byExtId.get(src);
-      if (!srcL) continue;
-      const x1   = srcL.x + CW;
-      const y1   = srcL.y + CH / 2;
-      const x2   = thirdCard.x;
-      const y2   = side === 'top' ? thirdCard.y + CH * 0.27 : thirdCard.y + CH * 0.73;
-      const xMid = x1 + CGAP / 2;
-      lines.push({ x1, y1, x2, y2, xMid });
-    }
-  }
-
-  return { cards, lines, thirdCard, canvasW, canvasH };
-}
+// Layout do chaveamento (dimensões, ordem da árvore e linhas) vem de
+// components/bracketLayout.ts — fonte única compartilhada com a aba Previsão.
 
 // ── Card individual ───────────────────────────────────────────────────────────
 
@@ -1215,7 +1053,7 @@ const bkS = StyleSheet.create({
 
 export default function TabelasScreen(): React.JSX.Element {
   const { canAccessGerencia } = useAuth();
-  const [phase, setPhase] = useState<Phase>('grupos');
+  const [phase, setPhase] = useState<Phase>('matamata');
   const [data, setData] = useState<StandingsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
