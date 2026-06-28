@@ -11,7 +11,7 @@ import { patchMatchScore, resetMatchScore } from '@/services/matches';
 import { getStandingsData } from '@/services/standings';
 import type { StandingsData, StandingRow, ApiGroup, BracketMatch, GroupMatch } from '@/services/standings';
 import {
-  buildBracketLayout, CW, CH, PAD, COL_ORDER, COL_LABELS, type LineSegment,
+  buildBracketLayout, CW, CH, COL_ORDER, COL_LABELS, type LineSegment,
 } from '@/components/bracketLayout';
 import { BracketCanvas } from '@/components/BracketCanvas';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '@/constants/theme';
@@ -938,16 +938,18 @@ function MataMataView({
         </View>
       )}
 
-      <BracketCanvas canvasW={canvasW} totalH={totalH} onWidth={setAvailW}>
-        {/* Labels de fase */}
-        {COL_ORDER.map((round, idx) => bracket.some(m => m.round === round) && (
+      <BracketCanvas
+        canvasW={canvasW}
+        bodyH={totalH}
+        onWidth={setAvailW}
+        labels={COL_ORDER.map((round, idx) => bracket.some(m => m.round === round) && (
           <Text key={round} style={[bkS.colLabel, {
-            position: 'absolute', left: colXs[idx], top: PAD, width: CW, textAlign: 'center',
+            position: 'absolute', left: colXs[idx], top: 14, width: CW, textAlign: 'center',
           }]}>
             {COL_LABELS[round]}
           </Text>
         ))}
-
+      >
         {/* Linhas de conexão — atrás dos cards */}
         <ConnectorLines lines={lines} />
 

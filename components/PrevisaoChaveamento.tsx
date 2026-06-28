@@ -10,7 +10,7 @@ import type { BracketMatch, TeamInfo } from '@/services/standings';
 import type { BracketPicks } from '@/services/bracketPredictions';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '@/constants/theme';
 import {
-  buildBracketLayout, CW, CH, PAD, COL_ORDER, COL_LABELS, type LineSegment,
+  buildBracketLayout, CW, CH, COL_ORDER, COL_LABELS, type LineSegment,
 } from '@/components/bracketLayout';
 import { BracketCanvas } from '@/components/BracketCanvas';
 import { isBracketLocked, BRACKET_LOCK_LABEL } from '@/constants/bracket';
@@ -229,7 +229,8 @@ export function PrevisaoChaveamento(): React.JSX.Element {
   const totalH = canvasH + (thirdCard ? CH + 52 : 0);
 
   const done  = Object.values(picks).filter(Boolean).length;
-  const total = bracket.filter(m => m.round !== 'terceiro').length;
+  // 32 jogos do mata-mata = R32(16)+Oitavas(8)+Quartas(4)+Semis(2)+3º(1)+Final(1).
+  const total = bracket.length;
 
   if (loading) {
     return (
@@ -279,17 +280,19 @@ export function PrevisaoChaveamento(): React.JSX.Element {
           : 'Toque em uma seleção para avançá-la. Toque novamente para desfazer.'}
       </Text>
 
-      {/* Canvas: rolagem vertical única no PC (largura total), pan livre no celular */}
-      <BracketCanvas canvasW={canvasW} totalH={totalH} onWidth={setAvailW}>
-        {/* Labels */}
-        {COL_ORDER.map((round, idx) => bracket.some(m => m.round === round) && (
+      {/* Canvas: faixa de títulos fixa + zoom (ver BracketCanvas) */}
+      <BracketCanvas
+        canvasW={canvasW}
+        bodyH={totalH}
+        onWidth={setAvailW}
+        labels={COL_ORDER.map((round, idx) => bracket.some(m => m.round === round) && (
           <Text key={round} style={[pS.colLabel, {
-            position: 'absolute', left: colXs[idx], top: PAD, width: CW, textAlign: 'center',
+            position: 'absolute', left: colXs[idx], top: 14, width: CW, textAlign: 'center',
           }]}>
             {COL_LABELS[round]}
           </Text>
         ))}
-
+      >
         {/* Linhas */}
         <Lines lines={lines} />
 
