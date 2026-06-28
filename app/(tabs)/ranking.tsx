@@ -4,6 +4,7 @@ import {
   Dimensions, Platform, UIManager, ActivityIndicator, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BracketCanvas } from '@/components/BracketCanvas';
 import { FlagImage } from '@/components/FlagImage';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useAuth } from '@/hooks/useAuth';
@@ -319,13 +320,6 @@ const PHASE_LABEL: Record<Phase, string> = {
   terceiros: '3os Lugares',
   grupos: 'Fase de Grupos',
   matamata: 'Mata-Mata',
-};
-
-type KnockoutRound = 'r32' | 'r16' | 'qf' | 'sf' | 'final' | 'terceiro';
-const KO_LABEL: Record<KnockoutRound, string> = {
-  r32: 'Rodada de 32', r16: 'Oitavas de Final',
-  qf: 'Quartas de Final', sf: 'Semifinais',
-  final: 'Final', terceiro: '3º Lugar',
 };
 
 const CLASSIFICATION_CRITERIA = [
@@ -785,9 +779,6 @@ const crS = StyleSheet.create({
 // ─── MATA-MATA ────────────────────────────────────────────────────────────────
 
 // Largura do card de confronto no bracket
-const BRACKET_CARD_W = 148;
-const BRACKET_COL_GAP = 36; // espaço horizontal entre colunas
-const BRACKET_ROW_GAP = 12; // espaço vertical mínimo entre cards
 
 /** Um card de confronto compacto para uso dentro do bracket visual */
 function BracketCard({
@@ -803,8 +794,8 @@ function BracketCard({
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const hasScore = match.homeScore !== null && match.awayScore !== null;
-  const hasPens  = match.homePenalty !== null && match.awayPenalty !== null;
   const teamsKnown = !!(match.homeTeam && match.awayTeam);
+  const phaseHint = match.round === 'terceiro' ? '3o Lugar' : null;
 
   function TeamRow({ team, slot, score, pen, winner }: {
     team: BracketMatch['homeTeam'];
@@ -821,11 +812,12 @@ function BracketCard({
         <Text style={[bkS.teamName, winner && bkS.teamNameWinner]} numberOfLines={1}>
           {team ? team.name : (slot ?? 'A definir')}
         </Text>
-        {score !== null && (
-          <Text style={[bkS.scoreChip, winner && bkS.scoreChipWinner]}>
-            {score}{pen !== null ? `(${pen})` : ''}
+        <View style={[bkS.scoreBox, winner && bkS.scoreBoxWinner]}>
+          <Text style={[bkS.scoreText, winner && bkS.scoreTextWinner]}>
+            {score ?? '-'}
           </Text>
-        )}
+          {pen !== null && <Text style={bkS.penText}>{pen}</Text>}
+        </View>
       </View>
     );
   }
@@ -846,14 +838,16 @@ function BracketCard({
   }
 
   return (
-    <View>
+    <View style={bkS.cardWrap}>
       <TouchableOpacity
         activeOpacity={0.85}
         onPress={() => setExpanded((v) => !v)}
         style={[bkS.card, highlighted && bkS.cardHighlighted]}
       >
         <View style={bkS.matchNumRow}>
-          <Text style={bkS.matchNum}>J{match.matchNumber}</Text>
+          <Text style={bkS.matchNum}>
+            J{match.matchNumber}{phaseHint ? ` - ${phaseHint}` : ''}
+          </Text>
           <View style={[bkS.statusDot, {
             backgroundColor:
               match.status === 'FINISHED' ? Colors.error :
@@ -899,29 +893,6 @@ function BracketCard({
 }
 
 /** Coluna de confrontos do bracket com rótulo de fase */
-function BracketColumn({
-  round, label, matches, isAdmin, onMatchSaved,
-}: {
-  round: string;
-  label: string;
-  matches: BracketMatch[];
-  isAdmin: boolean;
-  onMatchSaved: () => void;
-}): React.JSX.Element {
-  // Ordena pelo matchNumber para posicionamento correto
-  const sorted = [...matches].sort((a, b) => (a.matchNumber ?? 0) - (b.matchNumber ?? 0));
-  return (
-    <View style={bkS.column}>
-      <Text style={bkS.colLabel}>{label}</Text>
-      <View style={bkS.colCards}>
-        {sorted.map((m) => (
-          <BracketCard key={m.id} match={m} isAdmin={isAdmin} onMatchSaved={onMatchSaved} />
-        ))}
-      </View>
-    </View>
-  );
-}
-
 function MataMataView({
   bracket, isAdmin, onMatchSaved,
 }: {
@@ -930,12 +901,6 @@ function MataMataView({
   onMatchSaved: () => void;
 }): React.JSX.Element {
   // Agrupa por rodada, preservando ordem de exibição
-  const PHASE_ORDER: KnockoutRound[] = ['r32', 'r16', 'qf', 'sf', 'final', 'terceiro'];
-
-  const columns = PHASE_ORDER
-    .map((r) => ({ round: r, label: KO_LABEL[r], matches: bracket.filter((m) => m.round === r) }))
-    .filter((c) => c.matches.length > 0);
-
   return (
     <View style={{ flex: 1 }}>
       {/* Aviso Rodada de 32 */}
@@ -947,23 +912,16 @@ function MataMataView({
           </Text>
         </View>
       )}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator
-        style={{ flex: 1 }}
-        contentContainerStyle={bkS.bracketRow}
-      >
-        {columns.map((col) => (
-          <BracketColumn
-            key={col.round}
-            round={col.round}
-            label={col.label}
-            matches={col.matches}
+      <BracketCanvas
+        matches={bracket}
+        renderMatch={(match) => (
+          <BracketCard
+            match={match}
             isAdmin={isAdmin}
             onMatchSaved={onMatchSaved}
           />
-        ))}
-      </ScrollView>
+        )}
+      />
     </View>
   );
 }
@@ -971,22 +929,22 @@ function MataMataView({
 const bkS = StyleSheet.create({
   notice: { flexDirection: 'row', gap: 6, alignItems: 'flex-start', margin: Spacing.sm, padding: Spacing.sm, backgroundColor: Colors.surface, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.border },
   noticeTxt: { flex: 1, fontSize: 10, color: Colors.textSecondary, lineHeight: 15 },
-  bracketRow: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: Spacing.sm, paddingBottom: Spacing.xxl, paddingTop: Spacing.xs, gap: BRACKET_COL_GAP },
-  column: { width: BRACKET_CARD_W, alignItems: 'stretch' },
-  colLabel: { fontSize: 9, fontWeight: FontWeights.bold, color: Colors.accentGold, textTransform: 'uppercase', letterSpacing: 0.8, textAlign: 'center', marginBottom: Spacing.sm },
-  colCards: { gap: BRACKET_ROW_GAP },
   // Card
-  card: { backgroundColor: Colors.surface, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadows.sm },
+  cardWrap: { width: '100%', height: '100%' },
+  card: { height: '100%', backgroundColor: Colors.surface, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadows.sm },
   cardHighlighted: { borderColor: Colors.accentGold },
-  matchNumRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, paddingTop: 4, paddingBottom: 2 },
+  matchNumRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 7, paddingTop: 5, paddingBottom: 3 },
   matchNum: { fontSize: 9, fontWeight: FontWeights.bold, color: Colors.accentGold },
   statusDot: { width: 5, height: 5, borderRadius: 3 },
-  teamRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 6, paddingVertical: 5 },
+  teamRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 7, paddingVertical: 5 },
   teamRowWinner: { backgroundColor: 'rgba(245,158,11,0.08)' },
   teamName: { flex: 1, fontSize: 11, color: Colors.textSecondary, fontWeight: FontWeights.medium },
   teamNameWinner: { color: Colors.textPrimary, fontWeight: FontWeights.bold },
-  scoreChip: { fontSize: 11, fontWeight: FontWeights.bold, color: Colors.textSecondary, minWidth: 18, textAlign: 'right' },
-  scoreChipWinner: { color: Colors.accentGold },
+  scoreBox: { minWidth: 32, height: 28, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.backgroundAlt, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  scoreBoxWinner: { borderColor: Colors.accentGold, backgroundColor: 'rgba(245,158,11,0.12)' },
+  scoreText: { fontSize: 13, fontWeight: FontWeights.bold, color: Colors.textSecondary, lineHeight: 15 },
+  scoreTextWinner: { color: Colors.accentGold },
+  penText: { fontSize: 8, color: Colors.textSecondary, lineHeight: 9 },
   flagPlaceholder: { width: 14, height: 10, backgroundColor: Colors.border, borderRadius: 2 },
   divider: { height: 1, backgroundColor: Colors.border, marginHorizontal: 6 },
   // Expand panel
