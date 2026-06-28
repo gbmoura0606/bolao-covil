@@ -54,6 +54,10 @@ function ParticipantRow({
         <Text style={rowS.statValue}>{player.exactMatches}</Text>
         <Text style={rowS.statLabel}>exatos</Text>
       </View>
+      <View style={rowS.stat}>
+        <Text style={[rowS.statValue, { color: Colors.accentGold }]}>{player.bracketPoints ?? 0}</Text>
+        <Text style={rowS.statLabel}>previsão</Text>
+      </View>
       <View style={rowS.pointsCol}>
         <Text style={[rowS.points, isCurrentUser && rowS.pointsSelf]}>{player.points}</Text>
         <Text style={rowS.ptLabel}>pts</Text>
@@ -328,6 +332,7 @@ export default function LigaRankingScreen(): React.JSX.Element {
             <View style={{ width: 30 }} />
             <Text style={[styles.colHeader, { flex: 1, marginLeft: Spacing.sm }]}>Participante</Text>
             <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>Exatos</Text>
+            <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>Prev.</Text>
             <Text style={[styles.colHeader, { width: 56, textAlign: 'right' }]}>Pontos</Text>
           </View>
 

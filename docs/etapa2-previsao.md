@@ -1,8 +1,20 @@
 # Etapa 2 — Previsão de Chaveamento (pontuação + comparação)
 
-Estado após esta sessão: títulos de fase fixos, zoom no canvas (mobile) e
-contador 32/32 já entregues. O que falta na Previsão está abaixo, em ordem de
-prioridade.
+## ✅ STATUS — tudo implementado
+- **0. Comparação entre participantes** (após a trava): endpoint `/all`, seletor
+  de usuários, modo "comparar" (verde/vermelho), indicação de read-only.
+- **1. Pontuação por fase**: `backend/config/bracketScoring.ts`
+  (`computeBracketPoints`) + testes em `backend/test/bracketScoring.test.ts`.
+- **2. Pontos ao vivo**: badge "+N" por confronto + total na barra (espelho
+  `constants/bracketScoring.ts`).
+- **3. Ranking da Previsão**: `GET /api/bracket-prediction/ranking` + modal.
+- **4. Coluna "Prev." no ranking da Liga**: `rankingController` + `liga-ranking`.
+- **5. "Ver palpites do confronto"**: toque no card (após a trava) → modal com o
+  palpite de cada participante (reusa `/all`).
+- **Admin**: `GET /api/bracket-prediction/admin/status` + tela
+  `app/gerencia/previsoes.tsx` (quem completou / parcial / não iniciou).
+
+Histórico do plano original abaixo.
 
 ## 0. URGENTE — Comparar previsões entre usuários (trava hoje 16h BRT)
 

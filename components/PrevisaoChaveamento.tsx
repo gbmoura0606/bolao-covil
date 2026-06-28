@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FlagImage } from '@/components/FlagImage';
 import { getStandingsData } from '@/services/standings';
-import { getBracketPrediction, saveBracketPrediction, getAllBracketPredictions } from '@/services/bracketPredictions';
+import {
+  getBracketPrediction, saveBracketPrediction, getAllBracketPredictions,
+  getBracketRanking, type BracketRankingEntry,
+} from '@/services/bracketPredictions';
 import type { BracketMatch, TeamInfo } from '@/services/standings';
 import type { BracketPicks, UserBracketPrediction } from '@/services/bracketPredictions';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,6 +18,7 @@ import {
 } from '@/components/bracketLayout';
 import { BracketCanvas } from '@/components/BracketCanvas';
 import { isBracketLocked, BRACKET_LOCK_LABEL } from '@/constants/bracket';
+import { matchPoints, totalBracketPoints } from '@/constants/bracketScoring';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -59,6 +63,7 @@ function resolveTeam(
 
 function PredCard({
   match, picks, byExtId, allMatches, onPick, cardStyle, locked = false, compareState = null,
+  points = 0, finished = false, onInspect,
 }: {
   match: BracketMatch;
   picks: BracketPicks;
@@ -69,6 +74,12 @@ function PredCard({
   locked?: boolean;
   /** Comparação com a minha previsão: 'same' (igual), 'diff' (diverge) ou null. */
   compareState?: 'same' | 'diff' | null;
+  /** Pontos ganhos neste confronto (se já encerrado). */
+  points?: number;
+  /** Confronto encerrado (resultado oficial saiu). */
+  finished?: boolean;
+  /** Abre o painel "quem palpitou o quê" neste confronto (após a trava). */
+  onInspect?: (matchId: string) => void;
 }): React.JSX.Element {
   const homeTeam = resolveTeam(match, 'home', picks, byExtId);
   const awayTeam = resolveTeam(match, 'away', picks, byExtId);
@@ -100,17 +111,35 @@ function PredCard({
     );
   }
 
+  const Wrapper: React.ComponentType<{ children: React.ReactNode }> = onInspect
+    ? ({ children }) => (
+        <TouchableOpacity activeOpacity={0.7} onPress={() => onInspect(match.id)}
+          style={[pcS.card, cardStyle, compareState === 'same' && pcS.cardSame, compareState === 'diff' && pcS.cardDiff]}>
+          {children}
+        </TouchableOpacity>
+      )
+    : ({ children }) => (
+        <View style={[pcS.card, cardStyle, compareState === 'same' && pcS.cardSame, compareState === 'diff' && pcS.cardDiff]}>
+          {children}
+        </View>
+      );
+
   return (
-    <View style={[
-      pcS.card, cardStyle,
-      compareState === 'same' && pcS.cardSame,
-      compareState === 'diff' && pcS.cardDiff,
-    ]}>
-      <Text style={pcS.num}>J{match.matchNumber}</Text>
+    <Wrapper>
+      <View style={pcS.header}>
+        <Text style={pcS.num}>J{match.matchNumber}</Text>
+        {finished && points > 0 && (
+          <View style={pcS.ptsBadge}><Text style={pcS.ptsTxt}>+{points}</Text></View>
+        )}
+        {finished && points === 0 && pickedId !== null && (
+          <Ionicons name="close" size={11} color={Colors.error} />
+        )}
+        {onInspect && <Ionicons name="people-outline" size={11} color={Colors.textSecondary} />}
+      </View>
       <Slot team={homeTeam} slot={match.homeSlot} side="home" />
       <View style={pcS.divider} />
       <Slot team={awayTeam} slot={match.awaySlot} side="away" />
-    </View>
+    </Wrapper>
   );
 }
 
@@ -121,7 +150,10 @@ const pcS = StyleSheet.create({
   },
   cardSame: { borderColor: Colors.success, borderWidth: 2 },
   cardDiff: { borderColor: Colors.error, borderWidth: 2 },
-  num: { fontSize: 9, fontWeight: FontWeights.bold, color: Colors.accentGold, paddingHorizontal: 6, paddingTop: 4, paddingBottom: 2 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingTop: 4, paddingBottom: 2 },
+  num: { fontSize: 9, fontWeight: FontWeights.bold, color: Colors.accentGold, flex: 1 },
+  ptsBadge: { backgroundColor: Colors.success, borderRadius: 3, paddingHorizontal: 4, paddingVertical: 1 },
+  ptsTxt: { fontSize: 9, fontWeight: FontWeights.bold, color: Colors.background },
   slot: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 5 },
   slotPicked: { backgroundColor: 'rgba(245,158,11,0.14)' },
   slotLooser: { opacity: 0.35 },
@@ -165,6 +197,10 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
   const [others,    setOthers]    = useState<UserBracketPrediction[]>([]);
   const [viewerId,  setViewerId]  = useState<string | null>(null); // null = minha previsão
   const [compare,   setCompare]   = useState(false);
+  const [teamById,  setTeamById]  = useState<Map<string, TeamInfo>>(new Map());
+  const [inspectId, setInspectId] = useState<string | null>(null); // confronto sob inspeção
+  const [ranking,   setRanking]   = useState<BracketRankingEntry[] | null>(null);
+  const [showRanking, setShowRanking] = useState(false);
   const [loading,   setLoading]   = useState(true);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [error,     setError]     = useState('');
@@ -179,6 +215,14 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
       setBracket(standings.bracket);
       setPicks(saved.picks ?? {});
       latestPicks.current = saved.picks ?? {};
+      // Mapa teamId → time (todos os 48), para resolver picks na inspeção.
+      const tmap = new Map<string, TeamInfo>();
+      for (const g of standings.groups) for (const t of g.teams) tmap.set(t.id, t);
+      for (const m of standings.bracket) {
+        if (m.homeTeam) tmap.set(m.homeTeam.id, m.homeTeam);
+        if (m.awayTeam) tmap.set(m.awayTeam.id, m.awayTeam);
+      }
+      setTeamById(tmap);
       // Após a trava, carrega as previsões de todos para comparação.
       if (isBracketLocked()) {
         try { setOthers(await getAllBracketPredictions()); } catch { setOthers([]); }
@@ -278,6 +322,19 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
     return mine === theirs ? 'same' : 'diff';
   }
 
+  // ── Pontuação ao vivo (do usuário exibido) ─────────────────────────────────
+  const displayPoints = totalBracketPoints(displayPicks, bracket);
+  const anyFinished   = bracket.some(m => m.status === 'FINISHED');
+  // Inspeção ("quem palpitou o quê") só após a trava, com previsões dos outros.
+  const inspectable   = locked && others.length > 0;
+
+  const openRanking = useCallback(async () => {
+    setShowRanking(true);
+    if (ranking === null) {
+      try { setRanking(await getBracketRanking()); } catch { setRanking([]); }
+    }
+  }, [ranking]);
+
   if (loading) {
     return (
       <View style={pS.center}>
@@ -301,8 +358,17 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
     <View style={pS.container}>
       {/* Barra de status */}
       <View style={pS.bar}>
-        <Text style={pS.progress}>{done}/{total} escolhas</Text>
+        <Text style={pS.progress}>
+          {done}/{total} escolhas
+          {anyFinished && <Text style={pS.progressPts}>  ·  {displayPoints} pts{isViewingOther ? ` (${selected.label})` : ''}</Text>}
+        </Text>
         <View style={pS.saveRow}>
+          {anyFinished && (
+            <TouchableOpacity style={pS.rankBtn} onPress={() => void openRanking()} activeOpacity={0.8}>
+              <Ionicons name="podium-outline" size={13} color={Colors.accentGold} />
+              <Text style={pS.rankBtnTxt}>Ranking</Text>
+            </TouchableOpacity>
+          )}
           {locked ? (
             <><Ionicons name="lock-closed" size={12} color={Colors.textSecondary} /><Text style={pS.saveTxt}> Previsão encerrada</Text></>
           ) : (
@@ -416,6 +482,9 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
             onPick={handlePick}
             locked={cardLocked}
             compareState={compareState(c.match.id)}
+            points={matchPoints(c.match, displayPicks[c.match.id])}
+            finished={c.match.status === 'FINISHED'}
+            onInspect={inspectable ? setInspectId : undefined}
             cardStyle={{ position: 'absolute', left: c.x, top: c.y, width: CW }}
           />
         ))}
@@ -434,14 +503,156 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
               onPick={handlePick}
               locked={cardLocked}
               compareState={compareState(thirdCard.match.id)}
+              points={matchPoints(thirdCard.match, displayPicks[thirdCard.match.id])}
+              finished={thirdCard.match.status === 'FINISHED'}
+              onInspect={inspectable ? setInspectId : undefined}
               cardStyle={{ width: CW }}
             />
           </View>
         )}
       </BracketCanvas>
+
+      {/* Ranking da Previsão */}
+      <RankingModal
+        visible={showRanking}
+        onClose={() => setShowRanking(false)}
+        ranking={ranking}
+        myId={myId}
+      />
+
+      {/* Painel "quem palpitou o quê" num confronto */}
+      <InspectModal
+        matchId={inspectId}
+        bracket={bracket}
+        viewers={viewers}
+        teamById={teamById}
+        myId={myId}
+        onClose={() => setInspectId(null)}
+      />
     </View>
   );
 }
+
+// ── Modal: Ranking da Previsão ─────────────────────────────────────────────────
+
+function RankingModal({
+  visible, onClose, ranking, myId,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  ranking: BracketRankingEntry[] | null;
+  myId: string;
+}): React.JSX.Element {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={mS.backdrop} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={mS.sheet}>
+          <View style={mS.sheetHeader}>
+            <Text style={mS.sheetTitle}>Ranking da Previsão</Text>
+            <TouchableOpacity onPress={onClose}><Ionicons name="close" size={20} color={Colors.textSecondary} /></TouchableOpacity>
+          </View>
+          {ranking === null ? (
+            <ActivityIndicator color={Colors.accentGold} style={{ padding: Spacing.lg }} />
+          ) : ranking.length === 0 ? (
+            <Text style={mS.empty}>Sem pontos ainda — aparece conforme os jogos do mata-mata são encerrados.</Text>
+          ) : (
+            <ScrollView style={{ maxHeight: 380 }}>
+              {ranking.map((r, i) => (
+                <View key={r.userId} style={[mS.rankRow, r.userId === myId && mS.rankRowMe]}>
+                  <Text style={mS.rankPos}>{i + 1}º</Text>
+                  <Text style={[mS.rankName, r.userId === myId && mS.rankNameMe]} numberOfLines={1}>
+                    {r.nickname}{r.userId === myId ? ' (você)' : ''}
+                  </Text>
+                  <Text style={mS.rankPts}>{r.points} pts</Text>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+// ── Modal: palpites de cada participante num confronto ──────────────────────────
+
+function InspectModal({
+  matchId, bracket, viewers, teamById, myId, onClose,
+}: {
+  matchId: string | null;
+  bracket: BracketMatch[];
+  viewers: { id: string; label: string; picks: BracketPicks }[];
+  teamById: Map<string, TeamInfo>;
+  myId: string;
+  onClose: () => void;
+}): React.JSX.Element {
+  const match = matchId ? bracket.find(m => m.id === matchId) ?? null : null;
+
+  // Conta quantos escolheram cada time, e lista por participante.
+  const rows = viewers.map(v => ({
+    id: v.id, label: v.label, team: v.picks[matchId ?? ''] ? teamById.get(v.picks[matchId ?? '']!) ?? null : null,
+  }));
+  const counts = new Map<string, number>();
+  for (const r of rows) if (r.team) counts.set(r.team.id, (counts.get(r.team.id) ?? 0) + 1);
+
+  return (
+    <Modal visible={matchId !== null} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={mS.backdrop} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={mS.sheet}>
+          <View style={mS.sheetHeader}>
+            <Text style={mS.sheetTitle}>Palpites — J{match?.matchNumber ?? ''}</Text>
+            <TouchableOpacity onPress={onClose}><Ionicons name="close" size={20} color={Colors.textSecondary} /></TouchableOpacity>
+          </View>
+          <ScrollView style={{ maxHeight: 400 }}>
+            {rows.map(r => (
+              <View key={r.id} style={[mS.inspRow, r.id === myId && mS.rankRowMe]}>
+                <Text style={[mS.inspUser, r.id === myId && mS.rankNameMe]} numberOfLines={1}>
+                  {r.label}
+                </Text>
+                <View style={mS.inspTeam}>
+                  {r.team ? (
+                    <>
+                      <FlagImage country={r.team.country} height={13} />
+                      <Text style={mS.inspTeamTxt} numberOfLines={1}>{r.team.name}</Text>
+                    </>
+                  ) : (
+                    <Text style={mS.inspNone}>sem palpite</Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+const mS = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: Spacing.lg },
+  sheet: {
+    width: '100%', maxWidth: 420, backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden',
+  },
+  sheetHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    borderBottomWidth: 2, borderBottomColor: Colors.accentGold, backgroundColor: Colors.backgroundAlt,
+  },
+  sheetTitle: { fontSize: FontSizes.md, fontWeight: FontWeights.bold, color: Colors.accentGold },
+  empty: { fontSize: 12, color: Colors.textSecondary, textAlign: 'center', padding: Spacing.lg, lineHeight: 18 },
+  rankRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: 'rgba(55,65,81,0.4)' },
+  rankRowMe: { backgroundColor: 'rgba(245,158,11,0.08)' },
+  rankPos: { width: 32, fontSize: 12, fontWeight: FontWeights.bold, color: Colors.textSecondary },
+  rankName: { flex: 1, fontSize: 13, color: Colors.textPrimary, fontWeight: FontWeights.medium },
+  rankNameMe: { color: Colors.accentGold, fontWeight: FontWeights.bold },
+  rankPts: { fontSize: 13, fontWeight: FontWeights.bold, color: Colors.textPrimary },
+  inspRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(55,65,81,0.4)' },
+  inspUser: { width: 110, fontSize: 12, color: Colors.textSecondary, fontWeight: FontWeights.medium },
+  inspTeam: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  inspTeamTxt: { fontSize: 13, color: Colors.textPrimary, fontWeight: FontWeights.semibold, flex: 1 },
+  inspNone: { fontSize: 12, color: Colors.textSecondary, fontStyle: 'italic' },
+});
 
 const pS = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.backgroundAlt },
@@ -455,9 +666,16 @@ const pS = StyleSheet.create({
     paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
     backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
-  progress: { fontSize: 12, fontWeight: FontWeights.semibold, color: Colors.textSecondary },
-  saveRow: { flexDirection: 'row', alignItems: 'center' },
+  progress: { fontSize: 12, fontWeight: FontWeights.semibold, color: Colors.textSecondary, flex: 1 },
+  progressPts: { color: Colors.accentGold, fontWeight: FontWeights.bold },
+  saveRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   saveTxt: { fontSize: 11, color: Colors.textSecondary },
+  rankBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 999, borderWidth: 1, borderColor: Colors.accentGold,
+  },
+  rankBtnTxt: { fontSize: 11, fontWeight: FontWeights.bold, color: Colors.accentGold },
   hint: {
     fontSize: 10, color: Colors.textSecondary, textAlign: 'center',
     paddingHorizontal: Spacing.md, paddingVertical: 6,

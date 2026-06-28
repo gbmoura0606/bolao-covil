@@ -7,6 +7,8 @@ export interface UserStatus {
   canAccessGerencia: boolean;
   lastLoginAt: string | null;
   predictionCount: number;
+  bracketDone: number;
+  bracketComplete: boolean;
   createdAt: string;
 }
 

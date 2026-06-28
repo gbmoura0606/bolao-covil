@@ -8,6 +8,7 @@ interface RankingEntry {
   exactMatches: number;
   totalPredictions: number;
   winRate: number;
+  bracketPoints?: number;
 }
 
 export async function getRanking(): Promise<Player[]> {
@@ -34,5 +35,6 @@ export async function getLeagueRanking(leagueId: string): Promise<Player[]> {
     points: r.points,
     exactMatches: r.exactMatches,
     winRate: r.winRate,
+    bracketPoints: r.bracketPoints ?? 0,
   }));
 }

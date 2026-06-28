@@ -43,6 +43,8 @@ export interface Player {
   points: number;
   exactMatches: number;
   winRate: number;
+  /** Pontos da Previsão de Chaveamento (coluna separada no ranking da liga). */
+  bracketPoints?: number;
   isCurrentUser?: boolean;
 }
 
