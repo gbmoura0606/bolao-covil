@@ -88,19 +88,31 @@ export const SLOT_INDEX: Record<string, number> = computeSlotIndex();
 export interface CardLayout { x: number; y: number; match: BracketMatch; }
 export interface LineSegment { x1: number; y1: number; x2: number; y2: number; xMid: number; }
 
-export function buildBracketLayout(bracket: BracketMatch[]): {
+export function buildBracketLayout(bracket: BracketMatch[], opts?: { width?: number }): {
   cards: CardLayout[];
   lines: LineSegment[];
   thirdCard: CardLayout | null;
   canvasW: number;
   canvasH: number;
+  colXs: number[];
 } {
   const maxSlots = 16; // a R32 define a altura total
   const totalH = maxSlots * SLOT_H;
   const canvasH = LABEL_H + PAD + totalH + PAD;
-  const canvasW = PAD + COL_ORDER.length * (CW + CGAP) + PAD;
 
-  const colX = (colIdx: number): number => PAD + colIdx * (CW + CGAP);
+  const cols = COL_ORDER.length;
+  const baseW = PAD + cols * (CW + CGAP) + PAD;
+  // Se há largura disponível maior que o mínimo (PC), espalha as colunas para
+  // ocupar toda a largura; senão usa o gap padrão (canvas livre no celular).
+  let gap = CGAP;
+  let canvasW = baseW;
+  if (opts?.width && opts.width > baseW && cols > 1) {
+    canvasW = opts.width;
+    gap = (canvasW - PAD * 2 - cols * CW) / (cols - 1);
+  }
+
+  const colX = (colIdx: number): number => PAD + colIdx * (CW + gap);
+  const colXs = COL_ORDER.map((_, i) => colX(i));
 
   // Centro Y de um slot dentro de uma fase, relativo ao canvas
   function centerY(round: string, slotIdx: number): number {
@@ -165,5 +177,5 @@ export function buildBracketLayout(bracket: BracketMatch[]): {
     }
   }
 
-  return { cards, lines, thirdCard, canvasW, canvasH };
+  return { cards, lines, thirdCard, canvasW, canvasH, colXs };
 }

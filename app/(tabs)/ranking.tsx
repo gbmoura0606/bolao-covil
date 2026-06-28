@@ -11,8 +11,9 @@ import { patchMatchScore, resetMatchScore } from '@/services/matches';
 import { getStandingsData } from '@/services/standings';
 import type { StandingsData, StandingRow, ApiGroup, BracketMatch, GroupMatch } from '@/services/standings';
 import {
-  buildBracketLayout, CW, CH, CGAP, PAD, COL_ORDER, COL_LABELS, type LineSegment,
+  buildBracketLayout, CW, CH, PAD, COL_ORDER, COL_LABELS, type LineSegment,
 } from '@/components/bracketLayout';
+import { BracketCanvas } from '@/components/BracketCanvas';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '@/constants/theme';
 
 const FINISH_DELAY_MS = 105 * 60_000;
@@ -53,11 +54,14 @@ function AdminMatchControls({
   match,
   onSaved,
   allowPenalties = false,
+  hideScoreInputs = false,
 }: {
   match: EditableMatch;
   onSaved: () => void;
   /** Mata-mata: habilita disputa de pênaltis quando o tempo normal termina empatado. */
   allowPenalties?: boolean;
+  /** Quando o placar é editado fora (caixinhas inline), oculta os inputs de gols aqui. */
+  hideScoreInputs?: boolean;
 }): React.JSX.Element {
   const [home, setHome] = useState(match.homeScore?.toString() ?? '');
   const [away, setAway] = useState(match.awayScore?.toString() ?? '');
@@ -151,29 +155,31 @@ function AdminMatchControls({
 
   return (
     <View style={adS.adminWrap}>
-      <View style={adS.inputsRow}>
-        <TextInput
-          style={[adS.input, home !== '' && adS.inputFilled]}
-          value={home}
-          onChangeText={(v) => setHome(v.replace(/[^0-9]/g, '').slice(0, 2))}
-          keyboardType="number-pad"
-          maxLength={2}
-          placeholder="?"
-          placeholderTextColor={Colors.border}
-          selectTextOnFocus
-        />
-        <Text style={adS.sep}>×</Text>
-        <TextInput
-          style={[adS.input, away !== '' && adS.inputFilled]}
-          value={away}
-          onChangeText={(v) => setAway(v.replace(/[^0-9]/g, '').slice(0, 2))}
-          keyboardType="number-pad"
-          maxLength={2}
-          placeholder="?"
-          placeholderTextColor={Colors.border}
-          selectTextOnFocus
-        />
-      </View>
+      {!hideScoreInputs && (
+        <View style={adS.inputsRow}>
+          <TextInput
+            style={[adS.input, home !== '' && adS.inputFilled]}
+            value={home}
+            onChangeText={(v) => setHome(v.replace(/[^0-9]/g, '').slice(0, 2))}
+            keyboardType="number-pad"
+            maxLength={2}
+            placeholder="?"
+            placeholderTextColor={Colors.border}
+            selectTextOnFocus
+          />
+          <Text style={adS.sep}>×</Text>
+          <TextInput
+            style={[adS.input, away !== '' && adS.inputFilled]}
+            value={away}
+            onChangeText={(v) => setAway(v.replace(/[^0-9]/g, '').slice(0, 2))}
+            keyboardType="number-pad"
+            maxLength={2}
+            placeholder="?"
+            placeholderTextColor={Colors.border}
+            selectTextOnFocus
+          />
+        </View>
+      )}
 
       {showPen && (
         <View style={adS.penRow}>
@@ -203,7 +209,7 @@ function AdminMatchControls({
       )}
 
       <View style={adS.btnsRow}>
-        {dirty && hasScore && (
+        {!hideScoreInputs && dirty && hasScore && (
           <TouchableOpacity
             style={[adS.btn, adS.btnSave, confirming === 'save' && adS.btnConfirm]}
             onPress={() => {
@@ -786,7 +792,6 @@ const crS = StyleSheet.create({
 });
 
 // ─── MATA-MATA ────────────────────────────────────────────────────────────────
-// ─── MATA-MATA ────────────────────────────────────────────────────────────────
 
 // Layout do chaveamento (dimensões, ordem da árvore e linhas) vem de
 // components/bracketLayout.ts — fonte única compartilhada com a aba Previsão.
@@ -805,76 +810,102 @@ function BracketCard({
   const teamsKnown = !!(match.homeTeam && match.awayTeam);
   const hasScore   = match.homeScore !== null && match.awayScore !== null;
   const hasPens    = match.homePenalty !== null && match.awayPenalty !== null;
+  const editable   = isAdmin && teamsKnown && match.status !== 'FINISHED';
+
+  // Edição inline do placar (caixinhas ao lado de cada time) com autosave.
+  const [h, setH] = useState(match.homeScore?.toString() ?? '');
+  const [a, setA] = useState(match.awayScore?.toString() ?? '');
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    setH(match.homeScore?.toString() ?? '');
+    setA(match.awayScore?.toString() ?? '');
+  }, [match.homeScore, match.awayScore]);
+  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
+
+  function scheduleSave(nh: string, na: string): void {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    if (nh === '' || na === '') return;
+    saveTimer.current = setTimeout(() => {
+      void patchMatchScore(match.id, { homeScore: parseInt(nh, 10), awayScore: parseInt(na, 10) })
+        .then(onMatchSaved)
+        .catch(() => {});
+    }, 900);
+  }
 
   let homeWin = false, awayWin = false;
   if (hasScore) {
-    if (hasPens) {
-      homeWin = (match.homePenalty ?? 0) > (match.awayPenalty ?? 0);
-    } else {
-      homeWin = (match.homeScore ?? 0) > (match.awayScore ?? 0);
-    }
-    awayWin = hasScore && !homeWin && (match.homeScore !== match.awayScore || hasPens);
+    if (hasPens) homeWin = (match.homePenalty ?? 0) > (match.awayPenalty ?? 0);
+    else homeWin = (match.homeScore ?? 0) > (match.awayScore ?? 0);
+    awayWin = !homeWin && (match.homeScore !== match.awayScore || hasPens);
   }
 
-  function TeamRow({ team, slot, score, pen, winner }: {
-    team: BracketMatch['homeTeam']; slot: string|null;
-    score: number|null; pen: number|null; winner: boolean;
-  }): React.JSX.Element {
-    const scoreStr = score !== null
-      ? (pen !== null ? `${score}(${pen})` : `${score}`)
-      : null;
+  function TeamRow({ side }: { side: 'home' | 'away' }): React.JSX.Element {
+    const team   = side === 'home' ? match.homeTeam : match.awayTeam;
+    const slot   = side === 'home' ? match.homeSlot : match.awaySlot;
+    const score  = side === 'home' ? match.homeScore : match.awayScore;
+    const pen    = side === 'home' ? match.homePenalty : match.awayPenalty;
+    const winner = side === 'home' ? homeWin : awayWin;
+    const val    = side === 'home' ? h : a;
+    const setVal = side === 'home' ? setH : setA;
+    const scoreStr = score !== null ? (pen !== null ? `${score}(${pen})` : `${score}`) : null;
     return (
       <View style={[bkS.teamRow, winner && bkS.teamRowW]}>
-        {team
-          ? <FlagImage country={team.country} height={13} />
-          : <View style={bkS.flagPh} />}
+        {team ? <FlagImage country={team.country} height={13} /> : <View style={bkS.flagPh} />}
         <Text style={[bkS.teamName, winner && bkS.teamNameW]} numberOfLines={1}>
           {team ? team.name : (slot ?? '?')}
         </Text>
-        {scoreStr !== null && (
+        {editable ? (
+          <TextInput
+            style={[bkS.scoreInput, val !== '' && bkS.scoreInputFilled]}
+            value={val}
+            onChangeText={(t) => {
+              const clean = t.replace(/[^0-9]/g, '').slice(0, 2);
+              setVal(clean);
+              scheduleSave(side === 'home' ? clean : h, side === 'home' ? a : clean);
+            }}
+            keyboardType="number-pad"
+            maxLength={2}
+            placeholder="–"
+            placeholderTextColor={Colors.border}
+            selectTextOnFocus
+          />
+        ) : scoreStr !== null ? (
           <View style={[bkS.scoreBadge, winner && bkS.scoreBadgeW]}>
             <Text style={[bkS.scoreText, winner && bkS.scoreTextW]}>{scoreStr}</Text>
           </View>
-        )}
+        ) : null}
       </View>
     );
   }
 
   return (
-    <View style={cardStyle}>
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => setExpanded(v => !v)}
-        style={bkS.card}
-      >
-        <View style={bkS.cardHeader}>
-          <Text style={bkS.matchNum}>J{match.matchNumber}</Text>
-          <View style={[bkS.dot, {
-            backgroundColor:
-              match.status === 'FINISHED' ? Colors.error :
-              match.status === 'CLOSED'   ? Colors.accentGold : Colors.success,
-          }]} />
-        </View>
-        <TeamRow team={match.homeTeam} slot={match.homeSlot}
-          score={match.homeScore} pen={match.homePenalty} winner={homeWin} />
-        <View style={bkS.divider} />
-        <TeamRow team={match.awayTeam} slot={match.awaySlot}
-          score={match.awayScore} pen={match.awayPenalty} winner={awayWin} />
+    <View style={[bkS.card, cardStyle]}>
+      <TouchableOpacity activeOpacity={0.85} onPress={() => setExpanded(v => !v)} style={bkS.cardHeader}>
+        <Text style={bkS.matchNum}>J{match.matchNumber}</Text>
+        <View style={[bkS.dot, {
+          backgroundColor:
+            match.status === 'FINISHED' ? Colors.error :
+            match.status === 'CLOSED'   ? Colors.accentGold : Colors.success,
+        }]} />
       </TouchableOpacity>
+      <TeamRow side="home" />
+      <View style={bkS.divider} />
+      <TeamRow side="away" />
 
       {expanded && (
         <View style={bkS.panel}>
           {match.matchDate && (
             <Text style={bkS.panelTxt}>
-              {fmtDate(match.matchDate)} · {match.matchDate.substring(11,16)}
+              {fmtDate(match.matchDate)} · {match.matchDate.substring(11, 16)}
             </Text>
           )}
           {match.venue && <Text style={bkS.panelTxt}>{match.venue}</Text>}
-          {isAdmin && teamsKnown && match.status !== 'FINISHED' && (
+          {editable && (
             <AdminMatchControls
               match={match}
               onSaved={() => { setExpanded(false); onMatchSaved(); }}
               allowPenalties
+              hideScoreInputs
             />
           )}
         </View>
@@ -917,7 +948,8 @@ function MataMataView({
   isAdmin: boolean;
   onMatchSaved: () => void;
 }): React.JSX.Element {
-  const { cards, lines, thirdCard, canvasW, canvasH } = buildBracketLayout(bracket);
+  const [availW, setAvailW] = useState(0);
+  const { cards, lines, thirdCard, canvasW, canvasH, colXs } = buildBracketLayout(bracket, { width: availW });
   const totalH = canvasH + (thirdCard ? CH + 48 : 0);
 
   return (
@@ -926,72 +958,50 @@ function MataMataView({
         <View style={bkS.notice}>
           <Ionicons name="information-circle-outline" size={12} color={Colors.textSecondary} />
           <Text style={bkS.noticeTxt}>
-            Toque num jogo para ver data, estádio e editar (admin). 3os colocados pelo Anexo C da FIFA.
+            Placar editável nas caixinhas (admin). Toque no nº do jogo para data, estádio, pênaltis e encerrar. 3os colocados pelo Anexo C da FIFA.
           </Text>
         </View>
       )}
 
-      {/* ScrollView com scroll livre horizontal + vertical */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator
-        showsVerticalScrollIndicator={false}
-        style={{ flex: 1 }}
-        contentContainerStyle={{ width: canvasW }}
-      >
-        <ScrollView
-          showsVerticalScrollIndicator
-          contentContainerStyle={{ height: totalH, width: canvasW }}
-          style={{ flex: 1 }}
-        >
-          {/* Labels de fase */}
-          {COL_ORDER.map((round, idx) => bracket.some(m => m.round === round) && (
-            <Text key={round} style={[bkS.colLabel, {
-              position: 'absolute',
-              left: PAD + idx * (CW + CGAP),
-              top: PAD,
-              width: CW,
-              textAlign: 'center',
-            }]}>
-              {COL_LABELS[round]}
+      <BracketCanvas canvasW={canvasW} totalH={totalH} onWidth={setAvailW}>
+        {/* Labels de fase */}
+        {COL_ORDER.map((round, idx) => bracket.some(m => m.round === round) && (
+          <Text key={round} style={[bkS.colLabel, {
+            position: 'absolute', left: colXs[idx], top: PAD, width: CW, textAlign: 'center',
+          }]}>
+            {COL_LABELS[round]}
+          </Text>
+        ))}
+
+        {/* Linhas de conexão — atrás dos cards */}
+        <ConnectorLines lines={lines} />
+
+        {/* Cards posicionados absolutamente */}
+        {cards.map(c => (
+          <BracketCard
+            key={c.match.id}
+            match={c.match}
+            isAdmin={isAdmin}
+            onMatchSaved={onMatchSaved}
+            cardStyle={{ position: 'absolute', left: c.x, top: c.y, width: CW }}
+          />
+        ))}
+
+        {/* 3º Lugar */}
+        {thirdCard && (
+          <View style={{ position: 'absolute', left: thirdCard.x, top: thirdCard.y }}>
+            <Text style={[bkS.colLabel, { textAlign: 'center', width: CW, marginBottom: 4 }]}>
+              3º Lugar
             </Text>
-          ))}
-
-          {/* Linhas de conexão — atrás dos cards */}
-          <ConnectorLines lines={lines} />
-
-          {/* Cards posicionados absolutamente */}
-          {cards.map(c => (
             <BracketCard
-              key={c.match.id}
-              match={c.match}
+              match={thirdCard.match}
               isAdmin={isAdmin}
               onMatchSaved={onMatchSaved}
-              cardStyle={{
-                position: 'absolute',
-                left: c.x,
-                top: c.y,
-                width: CW,
-              }}
+              cardStyle={{ width: CW }}
             />
-          ))}
-
-          {/* 3º Lugar */}
-          {thirdCard && (
-            <View style={{ position: 'absolute', left: thirdCard.x, top: thirdCard.y }}>
-              <Text style={[bkS.colLabel, { textAlign: 'center', width: CW, marginBottom: 4 }]}>
-                3º Lugar
-              </Text>
-              <BracketCard
-                match={thirdCard.match}
-                isAdmin={isAdmin}
-                onMatchSaved={onMatchSaved}
-                cardStyle={{ width: CW }}
-              />
-            </View>
-          )}
-        </ScrollView>
-      </ScrollView>
+          </View>
+        )}
+      </BracketCanvas>
     </View>
   );
 }
@@ -1033,6 +1043,14 @@ const bkS = StyleSheet.create({
     alignItems: 'center',
   },
   scoreBadgeW: { backgroundColor: Colors.accentGold },
+  scoreInput: {
+    width: 26, height: 24, borderRadius: 4,
+    borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.backgroundAlt,
+    color: Colors.textPrimary, textAlign: 'center',
+    fontSize: 12, fontWeight: FontWeights.bold, padding: 0,
+  },
+  scoreInputFilled: { borderColor: '#3B82F6' },
   scoreText: { fontSize: 11, fontWeight: FontWeights.bold, color: Colors.textSecondary },
   scoreTextW: { color: Colors.background },
   flagPh: { width: 13, height: 9, backgroundColor: Colors.border, borderRadius: 2 },

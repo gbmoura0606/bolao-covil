@@ -10,8 +10,9 @@ import type { BracketMatch, TeamInfo } from '@/services/standings';
 import type { BracketPicks } from '@/services/bracketPredictions';
 import { Colors, Spacing, FontSizes, FontWeights, BorderRadius, Shadows } from '@/constants/theme';
 import {
-  buildBracketLayout, CW, CH, CGAP, PAD, COL_ORDER, COL_LABELS, type LineSegment,
+  buildBracketLayout, CW, CH, PAD, COL_ORDER, COL_LABELS, type LineSegment,
 } from '@/components/bracketLayout';
+import { BracketCanvas } from '@/components/BracketCanvas';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -221,7 +222,8 @@ export function PrevisaoChaveamento(): React.JSX.Element {
   }
 
   // Layout
-  const { cards, lines, thirdCard, canvasW, canvasH } = buildBracketLayout(bracket);
+  const [availW, setAvailW] = useState(0);
+  const { cards, lines, thirdCard, canvasW, canvasH, colXs } = buildBracketLayout(bracket, { width: availW });
   const totalH = canvasH + (thirdCard ? CH + 52 : 0);
 
   const done  = Object.values(picks).filter(Boolean).length;
@@ -265,62 +267,50 @@ export function PrevisaoChaveamento(): React.JSX.Element {
       </View>
       <Text style={pS.hint}>Toque em uma seleção para avançá-la. Toque novamente para desfazer.</Text>
 
-      {/* Canvas com scroll livre */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator
-        style={{ flex: 1 }}
-        contentContainerStyle={{ width: canvasW }}
-      >
-        <ScrollView
-          showsVerticalScrollIndicator
-          contentContainerStyle={{ height: totalH, width: canvasW }}
-          style={{ flex: 1 }}
-        >
-          {/* Labels */}
-          {COL_ORDER.map((round, idx) => bracket.some(m => m.round === round) && (
-            <Text key={round} style={[pS.colLabel, {
-              position: 'absolute', left: PAD + idx * (CW + CGAP),
-              top: PAD, width: CW, textAlign: 'center',
-            }]}>
-              {COL_LABELS[round]}
+      {/* Canvas: rolagem vertical única no PC (largura total), pan livre no celular */}
+      <BracketCanvas canvasW={canvasW} totalH={totalH} onWidth={setAvailW}>
+        {/* Labels */}
+        {COL_ORDER.map((round, idx) => bracket.some(m => m.round === round) && (
+          <Text key={round} style={[pS.colLabel, {
+            position: 'absolute', left: colXs[idx], top: PAD, width: CW, textAlign: 'center',
+          }]}>
+            {COL_LABELS[round]}
+          </Text>
+        ))}
+
+        {/* Linhas */}
+        <Lines lines={lines} />
+
+        {/* Cards */}
+        {cards.map(c => (
+          <PredCard
+            key={c.match.id}
+            match={c.match}
+            picks={picks}
+            byExtId={byExtId}
+            allMatches={bracket}
+            onPick={handlePick}
+            cardStyle={{ position: 'absolute', left: c.x, top: c.y, width: CW }}
+          />
+        ))}
+
+        {/* 3º Lugar */}
+        {thirdCard && (
+          <View style={{ position: 'absolute', left: thirdCard.x, top: thirdCard.y }}>
+            <Text style={[pS.colLabel, { textAlign: 'center', width: CW, marginBottom: 4 }]}>
+              3º Lugar
             </Text>
-          ))}
-
-          {/* Linhas */}
-          <Lines lines={lines} />
-
-          {/* Cards */}
-          {cards.map(c => (
             <PredCard
-              key={c.match.id}
-              match={c.match}
+              match={thirdCard.match}
               picks={picks}
               byExtId={byExtId}
               allMatches={bracket}
               onPick={handlePick}
-              cardStyle={{ position: 'absolute', left: c.x, top: c.y, width: CW }}
+              cardStyle={{ width: CW }}
             />
-          ))}
-
-          {/* 3º Lugar */}
-          {thirdCard && (
-            <View style={{ position: 'absolute', left: thirdCard.x, top: thirdCard.y }}>
-              <Text style={[pS.colLabel, { textAlign: 'center', width: CW, marginBottom: 4 }]}>
-                3º Lugar
-              </Text>
-              <PredCard
-                match={thirdCard.match}
-                picks={picks}
-                byExtId={byExtId}
-                allMatches={bracket}
-                onPick={handlePick}
-                cardStyle={{ width: CW }}
-              />
-            </View>
-          )}
-        </ScrollView>
-      </ScrollView>
+          </View>
+        )}
+      </BracketCanvas>
     </View>
   );
 }
