@@ -25,6 +25,33 @@ export async function getBracketPrediction(req: AuthenticatedRequest, res: Respo
 }
 
 /**
+ * GET /api/bracket-prediction/all
+ * Lista as previsões de TODOS os participantes — liberada apenas APÓS a trava
+ * (início do mata-mata). Antes disso responde 403 para ninguém copiar.
+ */
+export async function getAllBracketPredictions(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    if (!isBracketLocked()) {
+      res.status(403).json({ error: 'As previsões dos participantes só ficam visíveis após o encerramento.' });
+      return;
+    }
+    const all = await prisma.bracketPrediction.findMany({
+      include: { user: { select: { id: true, nickname: true } } },
+      orderBy: { user: { nickname: 'asc' } },
+    });
+    res.json({
+      predictions: all.map((bp) => ({
+        userId: bp.userId,
+        nickname: bp.user.nickname,
+        picks: bp.picks as Record<string, string | null>,
+      })),
+    });
+  } catch {
+    res.status(500).json({ error: 'Erro ao buscar previsões dos participantes.' });
+  }
+}
+
+/**
  * PUT /api/bracket-prediction
  * Upsert da previsão de chaveamento do usuário autenticado.
  * Body: { picks: { [matchId]: teamId | null } }
