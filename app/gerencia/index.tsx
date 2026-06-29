@@ -67,7 +67,7 @@ function MatchAdminCard({
 }): React.JSX.Element {
   const [home, setHome] = useState(match.homeScore?.toString() ?? '');
   const [away, setAway] = useState(match.awayScore?.toString() ?? '');
-  const [confirming, setConfirming] = useState<'save' | 'finish' | null>(null);
+  const [confirming, setConfirming] = useState<'save' | 'finish' | 'reset' | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -92,7 +92,7 @@ function MatchAdminCard({
   const dirty = home !== persistedHome || away !== persistedAway;
   const complete = home !== '' && away !== '';
 
-  function armConfirm(action: 'save' | 'finish'): boolean {
+  function armConfirm(action: 'save' | 'finish' | 'reset'): boolean {
     if (confirming === action) {
       if (confirmTimer.current) clearTimeout(confirmTimer.current);
       setConfirming(null);
@@ -135,6 +135,20 @@ function MatchAdminCard({
       awayScore: parseInt(away, 10),
       status: 'FINISHED',
     });
+  }
+
+  async function handleReset(): Promise<void> {
+    if (!armConfirm('reset')) return;
+    setError('');
+    setSaving(true);
+    try {
+      await api.post(`/api/matches/${match.id}/reset`);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao resetar.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const dateLabel = `${match.matchDate.substring(8, 10)}/${match.matchDate.substring(5, 7)} · ${match.matchDate.substring(11, 16)}`;
@@ -227,7 +241,22 @@ function MatchAdminCard({
       {isFinished && (
         <View style={styles.lockedRow}>
           <Ionicons name="lock-closed" size={11} color={Colors.textSecondary} />
-          <Text style={styles.lockedTxt}>Jogo encerrado — resultado travado</Text>
+          <Text style={styles.lockedTxt}>Jogo encerrado</Text>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.resetBtn, confirming === 'reset' && styles.btnConfirming]}
+            onPress={() => void handleReset()}
+            disabled={saving}
+            activeOpacity={0.8}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={Colors.textPrimary} />
+            ) : (
+              <>
+                <Ionicons name="refresh" size={13} color={Colors.textPrimary} />
+                <Text style={styles.actionTxt}>{confirming === 'reset' ? 'Resetar placar?' : 'Resetar placar'}</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
       )}
 
@@ -453,6 +482,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: { backgroundColor: '#3B82F6' },
   finishBtn: { backgroundColor: Colors.error },
+  resetBtn: { backgroundColor: Colors.textSecondary, flex: 0, minWidth: 0, paddingHorizontal: Spacing.md, marginLeft: Spacing.sm },
   btnConfirming: { opacity: 0.85, borderWidth: 1.5, borderColor: Colors.textPrimary },
   actionTxt: { fontSize: FontSizes.xs, fontWeight: FontWeights.bold, color: Colors.textPrimary },
 

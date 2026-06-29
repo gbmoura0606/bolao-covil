@@ -152,7 +152,18 @@ function AdminMatchControls({
     return (
       <View style={adS.lockedRow}>
         <Ionicons name="lock-closed" size={10} color={Colors.textSecondary} />
-        <Text style={adS.lockedTxt}>Encerrado — placar travado</Text>
+        <Text style={adS.lockedTxt}>Encerrado</Text>
+        <TouchableOpacity
+          style={[adS.btn, adS.btnReset, confirming === 'reset' && adS.btnConfirm]}
+          onPress={() => { if (!arm('reset')) return; void doReset(); }}
+          disabled={saving}
+          activeOpacity={0.8}
+        >
+          {saving
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <><Ionicons name="refresh" size={11} color="#fff" /><Text style={adS.btnTxt}>{confirming === 'reset' ? 'Resetar placar?' : 'Resetar'}</Text></>}
+        </TouchableOpacity>
+        {error !== '' && <Text style={adS.error}>{error}</Text>}
       </View>
     );
   }
@@ -240,6 +251,12 @@ function AdminMatchControls({
           <TouchableOpacity
             style={[adS.btn, adS.btnFinish, confirming === 'finish' && adS.btnConfirm]}
             onPress={() => {
+              // Mata-mata empatado exige pênaltis com vencedor antes de encerrar.
+              if (allowPenalties && isDraw && (homePen === '' || awayPen === '' || homePen === awayPen)) {
+                setError('Empate no mata-mata: informe os pênaltis com um vencedor antes de encerrar.');
+                setConfirming(null);
+                return;
+              }
               if (!arm('finish')) return;
               void doSave({ homeScore: parseInt(home, 10), awayScore: parseInt(away, 10), status: 'FINISHED', ...penaltyBody() });
             }}
@@ -868,8 +885,8 @@ function BracketCard({
       <View style={bkS.divider} />
       <TeamRow side="away" />
 
-      {/* Admin: mesmo fluxo da fase de grupos (salvar parcial, pênaltis no empate, encerrar 1h45 após) */}
-      {editable && (
+      {/* Admin: edição (parcial/pênaltis/encerrar) ou reset quando já encerrado. */}
+      {isAdmin && teamsKnown && (
         <View style={bkS.adminInline}>
           <AdminMatchControls
             match={match}

@@ -2,7 +2,6 @@ import { Response } from 'express';
 import { PrismaClient, MatchStatus } from '@prisma/client';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import { computePoints } from '../config/scoring';
-import { hasKickedOff } from '../config/time';
 import { buildStandings, type DbMatch } from './standingsController';
 
 const prisma = new PrismaClient();
@@ -103,6 +102,19 @@ export async function updateMatchScore(req: AuthenticatedRequest, res: Response)
         res.status(400).json({ error: 'Informe o placar antes de encerrar a partida.' });
         return;
       }
+      // Mata-mata empatado SÓ pode ser encerrado com os pênaltis (vencedor
+      // definido) — senão o confronto fica sem vencedor e o chaveamento trava.
+      const isKnockout = existing.group === null && existing.externalId !== null;
+      if (isKnockout && finalHome === finalAway) {
+        const finalHP = homePenalty !== undefined ? homePenalty : existing.homePenalty;
+        const finalAP = awayPenalty !== undefined ? awayPenalty : existing.awayPenalty;
+        if (finalHP === null || finalHP === undefined || finalAP === null || finalAP === undefined || finalHP === finalAP) {
+          res.status(400).json({
+            error: 'Empate no mata-mata: informe os pênaltis (com vencedor) antes de encerrar. Use a tela Tabelas › Mata-Mata.',
+          });
+          return;
+        }
+      }
     }
 
     const match = await prisma.match.update({
@@ -143,7 +155,12 @@ export async function updateMatchScore(req: AuthenticatedRequest, res: Response)
   }
 }
 
-/** Limpa o placar e volta o status para OPEN. Só permitido antes do início. */
+/**
+ * Limpa o placar e volta o status para OPEN — ação administrativa de correção.
+ * Permitido inclusive em partidas JÁ ENCERRADAS (ex.: empate de mata-mata
+ * encerrado sem pênaltis). Zera também os pontos dos palpites da partida, já
+ * que ela deixa de estar pontuada.
+ */
 export async function resetMatch(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { id } = req.params;
   try {
@@ -152,19 +169,17 @@ export async function resetMatch(req: AuthenticatedRequest, res: Response): Prom
       res.status(404).json({ error: 'Partida não encontrada.' });
       return;
     }
-    if (existing.status === 'FINISHED') {
-      res.status(409).json({ error: 'Partida encerrada não pode ser resetada.' });
-      return;
-    }
-    if (hasKickedOff(existing.matchDate)) {
-      res.status(409).json({ error: 'Partida já iniciada — só é possível resetar antes do início.' });
-      return;
-    }
-    await prisma.match.update({
-      where: { id },
-      data: { homeScore: null, awayScore: null, homePenalty: null, awayPenalty: null, status: 'OPEN' },
-    });
-    console.log(`[gerencia] ${req.userNickname ?? req.userId} resetou partida ${existing.externalId ?? id}`);
+    await prisma.$transaction([
+      prisma.prediction.updateMany({ where: { matchId: id }, data: { points: null } }),
+      prisma.match.update({
+        where: { id },
+        data: { homeScore: null, awayScore: null, homePenalty: null, awayPenalty: null, status: 'OPEN' },
+      }),
+    ]);
+    console.log(
+      `[gerencia] ${req.userNickname ?? req.userId} RESETOU partida ${existing.externalId ?? id} ` +
+      `(era ${existing.status} ${existing.homeScore ?? '-'}x${existing.awayScore ?? '-'})`,
+    );
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Erro ao resetar partida.' });
