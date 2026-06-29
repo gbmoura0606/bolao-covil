@@ -104,9 +104,12 @@ Schema: `backend/prisma/schema.prisma`. Deploy aplica schema via `prisma db push
   bracket; usuário escolhe quem avança até a final; autosave; resolve 3º lugar
   (perdedores das semis). Layout em `components/bracketLayout.ts` (ordem da árvore),
   canvas responsivo em `components/BracketCanvas.tsx`.
-- **Trava**: `constants/bracket.ts` (front) e `backend/config/bracket.ts` (back) —
-  `28/06/2026 16h BRT = 19h UTC` (início do M73). Depois disso `PUT /api/bracket-prediction`
+- **Trava definitiva**: `constants/bracket.ts` (front) e `backend/config/bracket.ts` (back) —
+  `29/06/2026 14h BRT = 17h UTC` (Brasil × Japão). Depois disso `PUT /api/bracket-prediction`
   responde 403 e a tela fica somente-leitura.
+- **Trava por jogo**: confrontos do mata-mata que já começaram (`status ≠ OPEN`)
+  não aceitam mudança de palpite mesmo com a previsão aberta — `upsertBracketPrediction`
+  mantém o valor salvo (anti-tamper) e a tela trava o card individualmente.
 - Rodada de 32 aberta nos **palpites** de placar: `matchesController.listMatches`
   resolve os times do mata-mata via `buildStandings` (mesmo fluxo dos grupos).
 

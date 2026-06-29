@@ -149,10 +149,27 @@ export async function upsertBracketPrediction(req: AuthenticatedRequest, res: Re
   }
 
   try {
+    // Trava por jogo: confrontos do mata-mata que já começaram (status ≠ OPEN,
+    // ex.: jogo do Canadá) não podem ter o palpite alterado, mesmo com a
+    // previsão reaberta. Mantém o valor já salvo, ignorando qualquer mudança.
+    const startedMatches = await prisma.match.findMany({
+      where: { group: null, externalId: { not: null }, status: { not: 'OPEN' } },
+      select: { id: true },
+    });
+    const merged: Record<string, string | null> = { ...picks };
+    if (startedMatches.length > 0) {
+      const existing = await prisma.bracketPrediction.findUnique({ where: { userId: req.userId! } });
+      const prev = (existing?.picks as Record<string, string | null> | undefined) ?? {};
+      for (const m of startedMatches) {
+        if (prev[m.id]) merged[m.id] = prev[m.id];
+        else delete merged[m.id]; // não pode criar palpite para jogo já iniciado
+      }
+    }
+
     const bp = await prisma.bracketPrediction.upsert({
       where: { userId: req.userId! },
-      update: { picks },
-      create: { userId: req.userId!, picks },
+      update: { picks: merged },
+      create: { userId: req.userId!, picks: merged },
     });
     res.json({ picks: bp.picks as Record<string, string | null> });
   } catch {

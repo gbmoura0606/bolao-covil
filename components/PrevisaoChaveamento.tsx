@@ -264,6 +264,9 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
 
   function handlePick(matchId: string, teamId: string | null): void {
     if (locked) return;
+    // Confronto que já começou (status ≠ OPEN) fica travado individualmente.
+    const target = bracket.find(x => x.id === matchId);
+    if (target && target.status !== 'OPEN') return;
     const newPicks = { ...latestPicks.current };
 
     // Invalida picks downstream
@@ -388,20 +391,20 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
       </View>
       {locked ? (
         <Text style={pS.hint}>
-          {`Previsão encerrada (mata-mata começou em ${BRACKET_LOCK_LABEL}). Suas escolhas estão salvas.`}
+          {`Previsão encerrada em ${BRACKET_LOCK_LABEL}. Suas escolhas estão salvas.`}
         </Text>
       ) : done < total ? (
         <View style={pS.warnBanner}>
           <Ionicons name="alert-circle" size={16} color={Colors.accentGold} />
           <Text style={pS.warnTxt}>
-            <Text style={pS.warnStrong}>Faça sua previsão!</Text> Faltam {total - done} de {total}.
-            Toque em uma seleção para avançá-la fase a fase até a final (e a disputa de 3º lugar).
-            Salva automaticamente. Encerra em {BRACKET_LOCK_LABEL}.
+            <Text style={pS.warnStrong}>Previsão reaberta!</Text> Faltam {total - done} de {total}.
+            Toque em uma seleção para avançá-la fase a fase até a final (e o 3º lugar).
+            Jogos que já começaram ficam travados. Salva automaticamente. Encerra de vez em {BRACKET_LOCK_LABEL}.
           </Text>
         </View>
       ) : (
         <Text style={pS.hint}>
-          Previsão completa ✓ — você ainda pode ajustá-la até {BRACKET_LOCK_LABEL}.
+          Previsão completa ✓ — ajustes liberados (exceto jogos já iniciados) até {BRACKET_LOCK_LABEL}.
         </Text>
       )}
 
@@ -480,7 +483,7 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
             byExtId={byExtId}
             allMatches={bracket}
             onPick={handlePick}
-            locked={cardLocked}
+            locked={cardLocked || c.match.status !== 'OPEN'}
             compareState={compareState(c.match.id)}
             points={matchPoints(c.match, displayPicks[c.match.id])}
             finished={c.match.status === 'FINISHED'}
@@ -501,7 +504,7 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
               byExtId={byExtId}
               allMatches={bracket}
               onPick={handlePick}
-              locked={cardLocked}
+              locked={cardLocked || thirdCard.match.status !== 'OPEN'}
               compareState={compareState(thirdCard.match.id)}
               points={matchPoints(thirdCard.match, displayPicks[thirdCard.match.id])}
               finished={thirdCard.match.status === 'FINISHED'}

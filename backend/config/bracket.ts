@@ -1,11 +1,13 @@
 /**
- * Trava da Previsão de chaveamento (server-side).
+ * Trava DEFINITIVA da Previsão de chaveamento (server-side).
  *
- * A previsão fecha — para sempre — no início do 1º jogo do mata-mata:
- * M73 (2º Grupo A × 2º Grupo B), 28/06/2026 às 16h BRT = 19h UTC.
- * Mantém o MESMO instante usado no frontend (constants/bracket.ts).
+ * Reaberta para ajustes e fechada de vez em 29/06/2026 às 14h BRT = 17h UTC
+ * (jogo Brasil × Japão). Mantém o MESMO instante do frontend (constants/bracket.ts).
+ *
+ * Além da trava global, confrontos que já começaram (status ≠ OPEN) ficam
+ * travados individualmente — enforcement em upsertBracketPrediction.
  */
-export const BRACKET_LOCK_UTC_MS = Date.UTC(2026, 5, 28, 19, 0, 0);
+export const BRACKET_LOCK_UTC_MS = Date.UTC(2026, 5, 29, 17, 0, 0);
 
 export function isBracketLocked(now: number = Date.now()): boolean {
   return now >= BRACKET_LOCK_UTC_MS;
