@@ -35,6 +35,14 @@ function PositionBadge({ pos }: { pos: number }): React.JSX.Element {
   );
 }
 
+function StatCell({ value, accent }: { value: number; accent?: boolean }): React.JSX.Element {
+  return (
+    <View style={rowS.statCell}>
+      <Text style={[rowS.statNum, accent && rowS.statNumAccent]}>{value}</Text>
+    </View>
+  );
+}
+
 function ParticipantRow({
   player, position, isCurrentUser,
 }: { player: Player; position: number; isCurrentUser: boolean }): React.JSX.Element {
@@ -47,14 +55,14 @@ function ParticipantRow({
         </Text>
         {isCurrentUser && <Text style={rowS.youLabel}>você</Text>}
       </View>
-      <View style={rowS.stat}>
-        <Text style={rowS.statValue}>{player.exactMatches}</Text>
-        <Text style={rowS.statLabel}>exatos</Text>
+      {/* PONTOS — coluna principal destacada */}
+      <View style={[rowS.pointsBox, isCurrentUser && rowS.pointsBoxSelf]}>
+        <Text style={[rowS.pointsVal, isCurrentUser && rowS.pointsValSelf]}>{player.points}</Text>
       </View>
-      <View style={rowS.pointsCol}>
-        <Text style={[rowS.points, isCurrentUser && rowS.pointsSelf]}>{player.points}</Text>
-        <Text style={rowS.ptLabel}>pts</Text>
-      </View>
+      <StatCell value={player.exactMatches} />
+      <StatCell value={player.goalDiffMatches ?? 0} />
+      <StatCell value={player.resultMatches ?? 0} />
+      <StatCell value={player.bracketPoints ?? 0} accent />
     </View>
   );
 }
@@ -63,11 +71,11 @@ const rowS = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.sm + 2,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(55,65,81,0.4)',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   rowHighlight: {
     backgroundColor: 'rgba(245, 158, 11, 0.06)',
@@ -89,13 +97,19 @@ const rowS = StyleSheet.create({
     borderRadius: BorderRadius.sm, paddingHorizontal: 4, paddingVertical: 1,
     fontWeight: FontWeights.semibold,
   },
-  stat: { alignItems: 'center', width: 44 },
-  statValue: { fontSize: FontSizes.sm, fontWeight: FontWeights.bold, color: Colors.textPrimary },
-  statLabel: { fontSize: 9, color: Colors.textSecondary },
-  pointsCol: { alignItems: 'flex-end', minWidth: 48 },
-  points: { fontSize: FontSizes.md, fontWeight: FontWeights.bold, color: Colors.textPrimary },
-  pointsSelf: { color: Colors.accentGold },
-  ptLabel: { fontSize: 9, color: Colors.textSecondary },
+  // PONTOS — coluna principal destacada (tema do app)
+  pointsBox: {
+    width: 48, alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 3, borderRadius: BorderRadius.sm,
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    borderWidth: 1, borderColor: 'rgba(245,158,11,0.35)',
+  },
+  pointsBoxSelf: { backgroundColor: 'rgba(245,158,11,0.22)', borderColor: Colors.accentGold },
+  pointsVal: { fontSize: FontSizes.lg, fontWeight: FontWeights.bold, color: Colors.accentGold },
+  pointsValSelf: { color: Colors.accentGold },
+  statCell: { width: 30, alignItems: 'center' },
+  statNum: { fontSize: FontSizes.sm, fontWeight: FontWeights.semibold, color: Colors.textPrimary },
+  statNumAccent: { color: Colors.accentGold, fontWeight: FontWeights.bold },
 });
 
 export default function LigaScreen(): React.JSX.Element {
@@ -223,9 +237,12 @@ export default function LigaScreen(): React.JSX.Element {
           {/* Table header */}
           <View style={styles.tableHeader}>
             <View style={{ width: 30 }} />
-            <Text style={[styles.colHeader, { flex: 1, marginLeft: Spacing.sm }]}>Participante</Text>
-            <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>Exatos</Text>
-            <Text style={[styles.colHeader, { width: 56, textAlign: 'right' }]}>Pontos</Text>
+            <Text style={[styles.colHeader, { flex: 1 }]}>Participante</Text>
+            <Text style={[styles.colHeaderMain, { width: 48, textAlign: 'center' }]}>Pontos</Text>
+            <Text style={[styles.colHeader, { width: 30, textAlign: 'center' }]}>Exa.</Text>
+            <Text style={[styles.colHeader, { width: 30, textAlign: 'center' }]}>Sld.</Text>
+            <Text style={[styles.colHeader, { width: 30, textAlign: 'center' }]}>Ven.</Text>
+            <Text style={[styles.colHeader, { width: 30, textAlign: 'center' }]}>Prev.</Text>
           </View>
 
           {ranking.length === 0 ? (
@@ -305,15 +322,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1a2030',
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.xs + 2,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   colHeader: {
     fontSize: 10, fontWeight: FontWeights.semibold,
     color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5,
+  },
+  colHeaderMain: {
+    fontSize: 10, fontWeight: FontWeights.bold,
+    color: Colors.accentGold, textTransform: 'uppercase', letterSpacing: 0.5,
   },
   empty: {
     alignItems: 'center', justifyContent: 'center',
