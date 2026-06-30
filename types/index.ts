@@ -40,10 +40,14 @@ export interface Prediction {
 export interface Player {
   id: string;
   name: string;
+  /** Total geral (palpites de placar + Previsão). */
   points: number;
   exactMatches: number;
+  /** Acertos de saldo e de vencedor (detalhe no ranking da liga). */
+  goalDiffMatches?: number;
+  resultMatches?: number;
   winRate: number;
-  /** Pontos da Previsão de Chaveamento (coluna separada no ranking da liga). */
+  /** Pontos da Previsão de Chaveamento (componente do total; coluna na liga). */
   bracketPoints?: number;
   isCurrentUser?: boolean;
 }

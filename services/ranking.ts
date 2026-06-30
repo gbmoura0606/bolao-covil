@@ -6,6 +6,8 @@ interface RankingEntry {
   nickname: string;
   points: number;
   exactMatches: number;
+  goalDiffMatches?: number;
+  resultMatches?: number;
   totalPredictions: number;
   winRate: number;
   bracketPoints?: number;
@@ -19,6 +21,7 @@ export async function getRanking(): Promise<Player[]> {
     points: r.points,
     exactMatches: r.exactMatches,
     winRate: r.winRate,
+    bracketPoints: r.bracketPoints ?? 0,
   }));
 }
 
@@ -34,6 +37,8 @@ export async function getLeagueRanking(leagueId: string): Promise<Player[]> {
     name: r.nickname,
     points: r.points,
     exactMatches: r.exactMatches,
+    goalDiffMatches: r.goalDiffMatches ?? 0,
+    resultMatches: r.resultMatches ?? 0,
     winRate: r.winRate,
     bracketPoints: r.bracketPoints ?? 0,
   }));

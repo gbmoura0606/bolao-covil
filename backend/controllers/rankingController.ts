@@ -10,11 +10,16 @@ const prisma = new PrismaClient();
 interface RankingEntry {
   id: string;
   nickname: string;
+  /** Total geral = palpites de placar + Previsão de Chaveamento. */
   points: number;
   exactMatches: number;
+  /** Acertos de saldo (diferença de gols) — só ranking de liga. */
+  goalDiffMatches?: number;
+  /** Acertos de vencedor/empate — só ranking de liga. */
+  resultMatches?: number;
   totalPredictions: number;
   winRate: number;
-  /** Pontos da Previsão de Chaveamento (mata-mata), coluna separada. */
+  /** Pontos da Previsão de Chaveamento (mata-mata), componente do total. */
   bracketPoints?: number;
 }
 
@@ -35,17 +40,6 @@ function buildEntry(user: {
   return { id: user.id, nickname: user.nickname, points, exactMatches, totalPredictions, winRate };
 }
 
-function computeLeaguePoints(
-  predHome: number, predAway: number,
-  realHome: number, realAway: number,
-  config: { scoreExact: number; scoreGoalDiff: number; scoreResult: number },
-): number {
-  if (predHome === realHome && predAway === realAway) return config.scoreExact;
-  if ((predHome - predAway) === (realHome - realAway)) return config.scoreGoalDiff;
-  if (Math.sign(predHome - predAway) === Math.sign(realHome - realAway)) return config.scoreResult;
-  return 0;
-}
-
 function buildLeagueEntry(
   user: {
     id: string;
@@ -59,20 +53,24 @@ function buildLeagueEntry(
   config: { scoreExact: number; scoreGoalDiff: number; scoreResult: number },
 ): RankingEntry {
   let points = 0;
-  let exactMatches = 0;
-  let correctResults = 0;
+  let exactMatches = 0;   // placar exato
+  let goalDiffMatches = 0; // saldo de gols
+  let resultMatches = 0;   // vencedor/empate
   const totalPredictions = user.predictions.length;
 
   for (const p of user.predictions) {
-    if (p.match.homeScore === null || p.match.awayScore === null) continue;
-    const pts = computeLeaguePoints(p.homeScore, p.awayScore, p.match.homeScore, p.match.awayScore, config);
-    points += pts;
-    if (pts === config.scoreExact) exactMatches++;
-    if (pts > 0) correctResults++;
+    const rh = p.match.homeScore, ra = p.match.awayScore;
+    if (rh === null || ra === null) continue;
+    const ph = p.homeScore, pa = p.awayScore;
+    // Hierarquia: exato > saldo > vencedor (cada palpite conta em uma categoria).
+    if (ph === rh && pa === ra) { exactMatches++; points += config.scoreExact; }
+    else if (ph - pa === rh - ra) { goalDiffMatches++; points += config.scoreGoalDiff; }
+    else if (Math.sign(ph - pa) === Math.sign(rh - ra)) { resultMatches++; points += config.scoreResult; }
   }
 
-  const winRate = totalPredictions > 0 ? Math.round((correctResults / totalPredictions) * 100) : 0;
-  return { id: user.id, nickname: user.nickname, points, exactMatches, totalPredictions, winRate };
+  const correct = exactMatches + goalDiffMatches + resultMatches;
+  const winRate = totalPredictions > 0 ? Math.round((correct / totalPredictions) * 100) : 0;
+  return { id: user.id, nickname: user.nickname, points, exactMatches, goalDiffMatches, resultMatches, totalPredictions, winRate };
 }
 
 export async function getGlobalRanking(_req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -88,8 +86,23 @@ export async function getGlobalRanking(_req: AuthenticatedRequest, res: Response
       },
     });
 
+    // Total global agora inclui a Previsão de Chaveamento.
+    const [matches, bracketPreds] = await Promise.all([
+      prisma.match.findMany({ include: { homeTeam: true, awayTeam: true }, orderBy: { matchDate: 'asc' } }),
+      prisma.bracketPrediction.findMany(),
+    ]);
+    const { bracket } = buildStandings(matches as DbMatch[]);
+    const bracketByUser = new Map<string, number>();
+    for (const bp of bracketPreds) {
+      bracketByUser.set(bp.userId, computeBracketPoints(bp.picks as Record<string, string | null>, bracket).total);
+    }
+
     const ranking = users
-      .map(buildEntry)
+      .map((u) => {
+        const e = buildEntry(u);
+        const bpts = bracketByUser.get(u.id) ?? 0;
+        return { ...e, bracketPoints: bpts, points: e.points + bpts };
+      })
       .sort((a, b) => b.points - a.points || b.exactMatches - a.exactMatches);
 
     res.json(ranking);
@@ -146,10 +159,12 @@ export async function getLeagueRanking(req: AuthenticatedRequest, res: Response)
     }
 
     const ranking = userLeagues
-      .map(({ user }) => ({
-        ...buildLeagueEntry(user, config),
-        bracketPoints: bracketByUser.get(user.id) ?? 0,
-      }))
+      .map(({ user }) => {
+        const e = buildLeagueEntry(user, config);
+        const bpts = bracketByUser.get(user.id) ?? 0;
+        // Total da liga inclui a Previsão (mostrada também na coluna "Prev.").
+        return { ...e, bracketPoints: bpts, points: e.points + bpts };
+      })
       .sort((a, b) => b.points - a.points || b.exactMatches - a.exactMatches);
 
     res.json(ranking);
