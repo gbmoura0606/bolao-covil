@@ -291,8 +291,9 @@ export default function JogosScreen(): React.JSX.Element {
         previsaoAlert={previsaoAlert}
       />
 
-      {/* Ranking widget — sempre visível, colapsável (inclusive na Previsão) */}
-      <RankingWidget refreshKey={rankingKey} />
+      {/* Ranking parcial geral — em todas as abas, EXCETO Previsão
+          (na Previsão usamos o ranking específico da Previsão). */}
+      {activeTab !== 'previsao' && <RankingWidget refreshKey={rankingKey} />}
 
       {/* Previsão de Chaveamento */}
       {activeTab === 'previsao' ? (

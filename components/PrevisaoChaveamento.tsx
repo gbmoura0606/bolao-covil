@@ -7,6 +7,7 @@ import { FlagImage } from '@/components/FlagImage';
 import { getStandingsData } from '@/services/standings';
 import {
   getBracketPrediction, saveBracketPrediction, getAllBracketPredictions,
+  getBracketRanking, type BracketRankingEntry,
 } from '@/services/bracketPredictions';
 import type { BracketMatch, TeamInfo } from '@/services/standings';
 import type { BracketPicks, UserBracketPrediction } from '@/services/bracketPredictions';
@@ -198,6 +199,8 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
   const [compare,   setCompare]   = useState(false);
   const [teamById,  setTeamById]  = useState<Map<string, TeamInfo>>(new Map());
   const [inspectId, setInspectId] = useState<string | null>(null); // confronto sob inspeção
+  const [ranking,   setRanking]   = useState<BracketRankingEntry[] | null>(null);
+  const [showRanking, setShowRanking] = useState(false);
   const [loading,   setLoading]   = useState(true);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [error,     setError]     = useState('');
@@ -328,6 +331,13 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
   // Inspeção ("quem palpitou o quê") só após a trava, com previsões dos outros.
   const inspectable   = locked && others.length > 0;
 
+  const openRanking = useCallback(async () => {
+    setShowRanking(true);
+    if (ranking === null) {
+      try { setRanking(await getBracketRanking()); } catch { setRanking([]); }
+    }
+  }, [ranking]);
+
   if (loading) {
     return (
       <View style={pS.center}>
@@ -356,6 +366,10 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
           {anyFinished && <Text style={pS.progressPts}>  ·  {displayPoints} pts{isViewingOther ? ` (${selected.label})` : ''}</Text>}
         </Text>
         <View style={pS.saveRow}>
+          <TouchableOpacity style={pS.rankBtn} onPress={() => void openRanking()} activeOpacity={0.8}>
+            <Ionicons name="podium-outline" size={13} color={Colors.accentGold} />
+            <Text style={pS.rankBtnTxt}>Ranking</Text>
+          </TouchableOpacity>
           {locked ? (
             <><Ionicons name="lock-closed" size={12} color={Colors.textSecondary} /><Text style={pS.saveTxt}> Previsão encerrada</Text></>
           ) : (
@@ -495,6 +509,14 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
         )}
       </BracketCanvas>
 
+      {/* Ranking da Previsão */}
+      <RankingModal
+        visible={showRanking}
+        onClose={() => setShowRanking(false)}
+        ranking={ranking}
+        myId={myId}
+      />
+
       {/* Painel "quem palpitou o quê" num confronto */}
       <InspectModal
         matchId={inspectId}
@@ -509,6 +531,47 @@ export function PrevisaoChaveamento({ onProgress }: { onProgress?: (done: number
 }
 
 // ── Modal: Ranking da Previsão ─────────────────────────────────────────────────
+
+// ── Modal: Ranking da Previsão ─────────────────────────────────────────────────
+
+function RankingModal({
+  visible, onClose, ranking, myId,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  ranking: BracketRankingEntry[] | null;
+  myId: string;
+}): React.JSX.Element {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={mS.backdrop} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={mS.sheet}>
+          <View style={mS.sheetHeader}>
+            <Text style={mS.sheetTitle}>Ranking da Previsão</Text>
+            <TouchableOpacity onPress={onClose}><Ionicons name="close" size={20} color={Colors.textSecondary} /></TouchableOpacity>
+          </View>
+          {ranking === null ? (
+            <ActivityIndicator color={Colors.accentGold} style={{ padding: Spacing.lg }} />
+          ) : ranking.length === 0 ? (
+            <Text style={mS.empty}>Sem pontos ainda — aparece conforme os jogos do mata-mata são encerrados.</Text>
+          ) : (
+            <ScrollView style={{ maxHeight: 380 }}>
+              {ranking.map((r, i) => (
+                <View key={r.userId} style={[mS.rankRow, r.userId === myId && mS.rankRowMe]}>
+                  <Text style={mS.rankPos}>{i + 1}º</Text>
+                  <Text style={[mS.rankName, r.userId === myId && mS.rankNameMe]} numberOfLines={1}>
+                    {r.nickname}{r.userId === myId ? ' (você)' : ''}
+                  </Text>
+                  <Text style={mS.rankPts}>{r.points} pts</Text>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
 
 // ── Modal: palpites de cada participante num confronto ──────────────────────────
 
