@@ -2,16 +2,30 @@ import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import { hasKickedOff } from '../config/time';
+import { isDelayedMatch } from '../config/delayedMatches';
 
 const prisma = new PrismaClient();
+
+type MatchWithTeams = {
+  status: string;
+  matchDate: Date;
+  homeTeam: { country: string } | null;
+  awayTeam: { country: string } | null;
+};
 
 /**
  * Palpites fecham quando o status sai de OPEN **ou** quando o horário do
  * jogo chega — o que vier primeiro. O horário protege contra o caso de a
  * gerência esquecer de fechar a partida manualmente.
+ *
+ * Exceção: jogos em DELAYED_MATCH_TEAM_PAIRS (atraso real, ex.: clima) ignoram
+ * o fallback por horário — só fecham quando a gerência mudar o status. Isso
+ * também mantém os palpites dos outros escondidos até lá (mesma condição).
  */
-function predictionsClosed(match: { status: string; matchDate: Date }): boolean {
-  return match.status !== 'OPEN' || hasKickedOff(match.matchDate);
+function predictionsClosed(match: MatchWithTeams): boolean {
+  if (match.status !== 'OPEN') return true;
+  if (isDelayedMatch(match.homeTeam?.country, match.awayTeam?.country)) return false;
+  return hasKickedOff(match.matchDate);
 }
 
 /**
@@ -23,7 +37,10 @@ export async function listMatchPredictions(req: AuthenticatedRequest, res: Respo
   const { matchId } = req.params;
 
   try {
-    const match = await prisma.match.findUnique({ where: { id: matchId } });
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: { homeTeam: true, awayTeam: true },
+    });
     if (!match) { res.status(404).json({ error: 'Partida não encontrada.' }); return; }
     if (!predictionsClosed(match)) {
       res.status(403).json({ error: 'Os palpites do grupo ficam visíveis quando a partida começa.' });
@@ -75,7 +92,10 @@ export async function createPrediction(req: AuthenticatedRequest, res: Response)
   }
 
   try {
-    const match = await prisma.match.findUnique({ where: { id: matchId } });
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: { homeTeam: true, awayTeam: true },
+    });
     if (!match) { res.status(404).json({ error: 'Partida não encontrada.' }); return; }
     if (predictionsClosed(match)) {
       res.status(400).json({ error: 'Esta partida não aceita mais palpites.' }); return;
@@ -104,7 +124,10 @@ export async function updatePrediction(req: AuthenticatedRequest, res: Response)
       res.status(404).json({ error: 'Palpite não encontrado.' }); return;
     }
 
-    const match = await prisma.match.findUnique({ where: { id: existing.matchId } });
+    const match = await prisma.match.findUnique({
+      where: { id: existing.matchId },
+      include: { homeTeam: true, awayTeam: true },
+    });
     if (!match || predictionsClosed(match)) {
       res.status(400).json({ error: 'Esta partida não aceita mais alterações.' }); return;
     }
@@ -135,7 +158,10 @@ export async function upsertPrediction(req: AuthenticatedRequest, res: Response)
   }
 
   try {
-    const match = await prisma.match.findUnique({ where: { id: matchId } });
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: { homeTeam: true, awayTeam: true },
+    });
     if (!match) { res.status(404).json({ error: 'Partida não encontrada.' }); return; }
     if (predictionsClosed(match)) {
       res.status(400).json({ error: 'Esta partida não aceita mais palpites.' }); return;

@@ -14,6 +14,7 @@ import { GroupPredictionsPanel } from '@/components/GroupPredictionsPanel';
 import { Colors, FontSizes, FontWeights, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 import type { Match } from '@/types';
 import type { PredictionEdit } from '@/hooks/usePredictions';
+import { isDelayedMatch } from '@/constants/delayedMatches';
 
 export interface MatchCardProps {
   match: Match;
@@ -55,8 +56,12 @@ function getPointsInfo(
  * matchDate/matchTime estão no horário de Brasília; em dispositivos no fuso
  * BRT a comparação local é exata. O backend rejeita palpites após o início
  * independentemente desta checagem visual.
+ *
+ * Exceção: jogos em isDelayedMatch (atraso real, ex.: clima) ignoram o
+ * horário agendado — continuam "abertos" até a gerência mudar o status.
  */
 function hasMatchStarted(match: Match): boolean {
+  if (isDelayedMatch(match.homeTeam.country, match.awayTeam.country)) return false;
   return new Date().getTime() >= new Date(`${match.matchDate}T${match.matchTime}:00`).getTime();
 }
 
